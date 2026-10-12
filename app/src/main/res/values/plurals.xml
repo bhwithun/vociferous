@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="delete_button">
+        <item quantity="one">Delete %d</item>
+        <item quantity="other">Delete %d</item>
+    </plurals>
+    <plurals name="deleted_now">
+        <item quantity="one">Deleted %1$d voicemail.</item>
+        <item quantity="other">Deleted %1$d voicemails.</item>
+    </plurals>
+    <plurals name="duration_seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+    <plurals name="known_summary">
+        <item quantity="one">%1$d known message, %2$d ready to delete.</item>
+        <item quantity="other">%1$d known messages, %2$d ready to delete.</item>
+    </plurals>
+    <plurals name="unknown_summary">
+        <item quantity="one">%1$d unknown message, %2$d ready to delete.</item>
+        <item quantity="other">%1$d unknown messages, %2$d ready to delete.</item>
+    </plurals>
+    <plurals name="more_calls">
+        <item quantity="one">%d more call</item>
+        <item quantity="other">%d more calls</item>
+    </plurals>
+</resources>

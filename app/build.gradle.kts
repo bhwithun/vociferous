@@ -5,12 +5,12 @@ plugins {
 }
 
 android {
-    namespace = "com.example.template"
+    namespace = "com.brian.dialbuddy"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.template"
-        minSdk = 26
+        applicationId = "com.brian.dialbuddy"
+        minSdk = 31
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -63,6 +63,7 @@ dependencies {
     implementation(libs.compose.material3)
 
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(libs.junit)
 
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
