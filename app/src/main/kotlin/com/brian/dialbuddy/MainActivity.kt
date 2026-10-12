@@ -5,7 +5,6 @@ import android.app.role.RoleManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.telecom.TelecomManager
 import android.widget.Toast
@@ -48,6 +47,10 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult(),
     ) {
         onRoleResult?.invoke()
+        if (askNotificationsAfterRole) {
+            askNotificationsAfterRole = false
+            requestNotificationPermission()
+        }
     }
 
     private var onRoleResult: (() -> Unit)? = null
@@ -62,6 +65,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private var onPickedNumber: ((String) -> Unit)? = null
+    private var skipRolePrompt = false
+    private var askNotificationsAfterRole = false
+
+    override fun onStart() {
+        super.onStart()
+        if (skipRolePrompt) {
+            skipRolePrompt = false
+            return
+        }
+        if (promptForDialerRole()) {
+            askNotificationsAfterRole = true
+        } else {
+            requestNotificationPermission()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,11 +122,6 @@ class MainActivity : ComponentActivity() {
         }
         LaunchedEffect(viewModel) {
             viewModel.consumeTelIntent(intent)
-            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
-            }
             viewModel.commands.collect { command ->
                 when (command) {
                     is DialCommand.PlaceCall -> placeCall(command.number)
@@ -122,10 +135,25 @@ class MainActivity : ComponentActivity() {
         DialScreen(
             viewModel = viewModel,
             state = state,
-            onChangeDefault = {
-                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-            },
         )
+    }
+
+    private fun promptForDialerRole(): Boolean {
+        val roleManager = getSystemService(RoleManager::class.java) ?: return false
+        if (!roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) return false
+        if (roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) return false
+        skipRolePrompt = true
+        roleLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+        return true
+    }
+
+    private fun requestNotificationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
     }
 
     private fun requestDialerRole(viewModel: DialViewModel) {
@@ -138,6 +166,7 @@ class MainActivity : ComponentActivity() {
             viewModel.refreshCapabilities()
             return
         }
+        skipRolePrompt = true
         roleLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
     }
 

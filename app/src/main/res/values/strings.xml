@@ -37,11 +37,13 @@
     <string name="deleted_month_label">30 days</string>
     <string name="deleted_year_label">Year</string>
     <string name="deleted_life_label">Lifetime</string>
+    <string name="stat_recognized">Recognized</string>
+    <string name="stat_unrecognized">Unrecognized</string>
+    <string name="stat_bulk">Bulk</string>
     <string name="become_dialer">Set as Phone app</string>
     <string name="already_dialer">Already the Phone app.</string>
     <string name="allow_voicemail">Allow voicemail access</string>
     <string name="allow_contacts">Show contact names</string>
-    <string name="change_default">Change default Phone app</string>
     <string name="role_unavailable">This phone does not let apps take the Phone role.</string>
     <string name="keypad_hint">number</string>
     <string name="backspace">&lt;X</string>

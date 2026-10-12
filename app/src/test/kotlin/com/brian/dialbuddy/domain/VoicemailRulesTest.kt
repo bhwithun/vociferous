@@ -2,6 +2,7 @@ package com.brian.dialbuddy.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,6 +33,15 @@ class VoicemailRulesTest {
     }
 
     @Test
+    fun singleDeleteFindsARecognizedMessageThatBulkDeleteSkips() {
+        val recognized = entry(7, 40, number = "5550100")
+        val removed = entry(9, 40, number = "5550100", deleted = true)
+        assertEquals(recognized, voicemailById(listOf(recognized, removed), 7))
+        assertNull(voicemailById(listOf(removed), 9))
+        assertTrue(bulkVoicemails(listOf(recognized), 3, setOf("5550100")).isEmpty())
+    }
+
+    @Test
     fun bulkDeleteSkipsRecognizedNumbers() {
         val entries = listOf(
             entry(1, 1, number = "5550100"),
@@ -43,12 +53,28 @@ class VoicemailRulesTest {
     }
 
     @Test
+    fun deletionTallyFollowsTheButtonThatRemovedTheMessage() {
+        assertEquals(DeletionCounts(known = 1), tallyDeletions(listOf(true), bulkButton = false))
+        assertEquals(DeletionCounts(known = 1), tallyDeletions(listOf(true), bulkButton = true))
+        assertEquals(DeletionCounts(unknown = 1), tallyDeletions(listOf(false), bulkButton = false))
+        assertEquals(DeletionCounts(bulk = 2), tallyDeletions(listOf(false, false), bulkButton = true))
+        assertEquals(
+            DeletionCounts(known = 1, bulk = 2),
+            tallyDeletions(listOf(true, false, false), bulkButton = true),
+        )
+    }
+
+    @Test
     fun deletionStampsRoundTripAndStayInsideTheWindow() {
-        val stamps = listOf(DeletionStamp(1_000L, 2), DeletionStamp(5_000L, 4))
+        val recent = DeletionStamp(5_000L, DeletionCounts(known = 3, unknown = 2, bulk = 7))
+        val stamps = listOf(recent)
         assertEquals(stamps, parseDeletionStamps(formatDeletionStamps(stamps)))
-        assertEquals(emptyList<DeletionStamp>(), parseDeletionStamps("bad;3:0;x:2"))
+        assertEquals(listOf(recent), parseDeletionStamps("5000:3:2:7:9"))
+        assertEquals(emptyList<DeletionStamp>(), parseDeletionStamps("1000:2;bad;3:0;x:2;4:-1:0:1;6000:0:0:0:4"))
         val now = 10_000L
-        assertEquals(4L, deletedInWindow(stamps, now, 6_000L))
+        val window = deletedInWindow(stamps, now, 6_000L)
+        assertEquals(DeletionCounts(known = 3, unknown = 2, bulk = 7), window)
+        assertEquals(window.known.toLong() + window.unknown + window.bulk, window.total)
         assertEquals(12L, nextDeletedTotal(10, 2))
     }
 

@@ -19,6 +19,9 @@ class AppStorage(private val context: Context) {
         val THRESHOLD = intPreferencesKey("threshold_seconds")
         val DELETION_STAMPS = stringPreferencesKey("deletion_stamps")
         val DELETED_TOTAL = longPreferencesKey("deleted_total")
+        val DELETED_KNOWN = longPreferencesKey("deleted_known")
+        val DELETED_UNKNOWN = longPreferencesKey("deleted_unknown")
+        val DELETED_BULK = longPreferencesKey("deleted_bulk")
         val SPEAKER = booleanPreferencesKey("speakerphone")
     }
 

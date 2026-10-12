@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +57,7 @@ import com.brian.dialbuddy.ui.theme.IconWell
 import com.brian.dialbuddy.ui.theme.Ink
 import com.brian.dialbuddy.ui.theme.InkMuted
 import com.brian.dialbuddy.ui.theme.DateBand
+import com.brian.dialbuddy.ui.theme.Forest
 import com.brian.dialbuddy.ui.theme.SurfaceGreen
 import com.brian.dialbuddy.ui.theme.TitleInk
 import com.brian.dialbuddy.viewmodel.MailboxRow
@@ -76,13 +79,11 @@ fun MailboxPane(
     showSamsungNote: Boolean,
     samsungNote: String,
     thresholdLabel: String,
-    speakerOn: Boolean,
     deleteLabel: String,
     deleteEnabled: Boolean,
     busy: Boolean,
     onTab: (MailboxTab) -> Unit,
     onThreshold: (Int) -> Unit,
-    onSpeaker: () -> Unit,
     onDelete: () -> Unit,
     onPlay: (Long) -> Unit,
     onDeleteOne: (Long) -> Unit,
@@ -160,10 +161,8 @@ fun MailboxPane(
                     items(messages, key = { "msg-${it.entry.id}" }) { row ->
                         VoicemailRowView(
                             row = row,
-                            speakerOn = speakerOn,
                             onPlay = onPlay,
                             onDeleteOne = onDeleteOne,
-                            onSpeaker = onSpeaker,
                             onOpen = { selected = row },
                         )
                     }
@@ -181,8 +180,6 @@ fun MailboxPane(
                         onDeleteOne(row.entry.id)
                     },
                     onClose = { selected = null },
-                    speakerOn = speakerOn,
-                    onSpeaker = onSpeaker,
                     onViewContact = {
                         selected = null
                         onViewContact(row)
@@ -226,10 +223,8 @@ private fun MailboxTabButton(
 @Composable
 private fun VoicemailRowView(
     row: MailboxRow,
-    speakerOn: Boolean,
     onPlay: (Long) -> Unit,
     onDeleteOne: (Long) -> Unit,
-    onSpeaker: () -> Unit,
     onOpen: () -> Unit,
 ) {
     val title = row.contactName ?: stringResource(R.string.unknown_caller)
@@ -262,10 +257,8 @@ private fun VoicemailRowView(
             horizontalAlignment = Alignment.End,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SpeakerButton(on = speakerOn, onClick = onSpeaker)
                 Box(
                     Modifier
-                        .padding(start = 6.dp)
                         .height(40.dp)
                         .width(40.dp)
                         .clip(CircleShape)
@@ -332,8 +325,6 @@ private fun VoicemailDetailDialog(
     onDelete: () -> Unit,
     onClose: () -> Unit,
     onViewContact: () -> Unit,
-    speakerOn: Boolean,
-    onSpeaker: () -> Unit,
 ) {
     val known = row.contactName
     val duration = row.entry.durationSeconds
@@ -378,10 +369,7 @@ private fun VoicemailDetailDialog(
             }
         },
         confirmButton = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SpeakerButton(on = speakerOn, onClick = onSpeaker)
-                TextButton(onClick = onPlay) { Text(stringResource(R.string.play)) }
-            }
+            TextButton(onClick = onPlay) { Text(stringResource(R.string.play)) }
         },
         dismissButton = {
             Row {
@@ -395,19 +383,20 @@ private fun VoicemailDetailDialog(
 }
 
 @Composable
-private fun SpeakerButton(on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun SpeakerButton(on: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val label = stringResource(if (on) R.string.speaker_on else R.string.speaker_off)
     val color = if (on) Accent else InkMuted
     Box(
         modifier
-            .size(32.dp)
+            .size(44.dp)
             .clip(CircleShape)
+            .background(Forest)
             .border(1.dp, color, CircleShape)
             .clickable(onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(16.dp)) {
+        Canvas(Modifier.size(22.dp)) {
             val speaker = Path().apply {
                 moveTo(size.width * 0.05f, size.height * 0.38f)
                 lineTo(size.width * 0.30f, size.height * 0.38f)
@@ -462,32 +451,74 @@ private fun timeLabel(millis: Long): String {
 }
 
 @Composable
-fun StatBadge(count: Long, label: String, color: Color, modifier: Modifier = Modifier) {
+fun StatTable(
+    title: String,
+    recognized: Long,
+    unrecognized: Long,
+    bulk: Long,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .padding(bottom = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(color.copy(alpha = 0.16f))
-            .padding(horizontal = 22.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .width(8.dp)
-                .height(48.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(color),
-        )
+        Column(Modifier.width(92.dp)) {
+            Text(
+                title,
+                color = color,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                style = tightText,
+            )
+            Text(
+                (recognized + unrecognized + bulk).toString(),
+                color = color,
+                fontWeight = FontWeight.Bold,
+                fontSize = 32.sp,
+                style = tightText.copy(fontFeatureSettings = "tnum", lineHeight = 32.sp),
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            StatRow(recognized.toString(), stringResource(R.string.stat_recognized), color)
+            StatRow(unrecognized.toString(), stringResource(R.string.stat_unrecognized), color)
+            StatRow(bulk.toString(), stringResource(R.string.stat_bulk), color)
+        }
+    }
+}
+
+private val tightText = TextStyle(
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
+    lineHeight = 16.sp,
+)
+
+@Composable
+private fun StatRow(counter: String, label: String, color: Color) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
-            count.toString(),
+            counter,
             color = color,
             fontWeight = FontWeight.Bold,
-            fontSize = 40.sp,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(108.dp),
+            fontSize = 16.sp,
+            textAlign = TextAlign.End,
+            style = tightText.copy(fontFeatureSettings = "tnum", lineHeight = 18.sp),
+            modifier = Modifier.width(40.dp),
         )
-        Text(label, color = Ink, fontSize = 22.sp)
+        Text(
+            label,
+            color = Ink,
+            fontSize = 14.sp,
+            style = tightText,
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
 
@@ -499,11 +530,9 @@ fun StatsActions(
     becomeLabel: String,
     voicemailLabel: String,
     contactsLabel: String,
-    changeLabel: String,
     onBecome: () -> Unit,
     onVoicemail: () -> Unit,
     onContacts: () -> Unit,
-    onChange: () -> Unit,
 ) {
     if (!isDialer) {
         Button(onClick = onBecome, modifier = Modifier.fillMaxWidth()) {
@@ -519,8 +548,5 @@ fun StatsActions(
         TextButton(onClick = onContacts, modifier = Modifier.fillMaxWidth()) {
             Text(contactsLabel)
         }
-    }
-    TextButton(onClick = onChange, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Text(changeLabel)
     }
 }

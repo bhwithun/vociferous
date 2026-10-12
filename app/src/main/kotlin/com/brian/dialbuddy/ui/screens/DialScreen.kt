@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -48,12 +49,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.brian.dialbuddy.R
+import com.brian.dialbuddy.domain.DeletionCounts
 import com.brian.dialbuddy.domain.presentVoicemails
 import com.brian.dialbuddy.telecom.Calls
 import com.brian.dialbuddy.ui.components.KeypadPane
 import com.brian.dialbuddy.ui.components.MailboxPane
 import com.brian.dialbuddy.ui.components.RaggedCard
-import com.brian.dialbuddy.ui.components.StatBadge
+import com.brian.dialbuddy.ui.components.SpeakerButton
+import com.brian.dialbuddy.ui.components.StatTable
 import com.brian.dialbuddy.ui.components.StatsActions
 import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.DigitStroke
@@ -80,7 +83,6 @@ private const val VOICEMAIL = 1
 fun DialScreen(
     viewModel: DialViewModel,
     state: DialUiState,
-    onChangeDefault: () -> Unit,
 ) {
     val context = LocalContext.current
     val inCall by Calls.state.collectAsState()
@@ -191,9 +193,20 @@ fun DialScreen(
                     band = TitleBand,
                     ink = TitleInk,
                     stroke = DigitStroke,
+                    overlay = {
+                        if (card != MailboxTab.Stats) {
+                            SpeakerButton(
+                                on = state.speakerOn,
+                                onClick = viewModel::toggleSpeaker,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 10.dp, end = 16.dp),
+                            )
+                        }
+                    },
                 ) {
                     if (card == MailboxTab.Stats) {
-                        StatsPage(viewModel, state, onChangeDefault)
+                        StatsPage(viewModel, state)
                     } else {
                         MailboxPage(viewModel, state, card)
                     }
@@ -251,6 +264,7 @@ private fun PageCard(
     band: Color,
     ink: Color,
     stroke: Color,
+    overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     RaggedCard(
@@ -262,6 +276,7 @@ private fun PageCard(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp, vertical = 10.dp),
+        overlay = overlay,
     ) {
         content()
     }
@@ -348,29 +363,45 @@ private fun sectionDots(page: Int, count: Int): String {
 }
 
 @Composable
+private fun DeletionCard(counts: DeletionCounts, title: String, color: Color) {
+    StatTable(
+        title = title,
+        recognized = counts.known.toLong(),
+        unrecognized = counts.unknown.toLong(),
+        bulk = counts.bulk.toLong(),
+        color = color,
+    )
+}
+
+@Composable
 private fun StatsPage(
     viewModel: DialViewModel,
     state: DialUiState,
-    onChangeDefault: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        StatBadge(viewModel.deletedIn(DialViewModel.weekWindow), stringResource(R.string.deleted_week_label), Accent)
-        StatBadge(viewModel.deletedIn(DialViewModel.monthWindow), stringResource(R.string.deleted_month_label), StatHoney)
-        StatBadge(viewModel.deletedIn(DialViewModel.yearWindow), stringResource(R.string.deleted_year_label), StatLilac)
-        StatBadge(state.deletedLife, stringResource(R.string.deleted_life_label), StatCoral)
-        StatsActions(
-            isDialer = state.isDialer,
-            showVoicemail = state.isDialer && !state.hasVoicemailPermission,
-            showContacts = state.isDialer && !state.hasContactsPermission,
-            becomeLabel = stringResource(R.string.become_dialer),
-            voicemailLabel = stringResource(R.string.allow_voicemail),
-            contactsLabel = stringResource(R.string.allow_contacts),
-            changeLabel = stringResource(R.string.change_default),
-            onBecome = viewModel::requestDialerRole,
-            onVoicemail = viewModel::requestVoicemailPermission,
-            onContacts = viewModel::requestContactsPermission,
-            onChange = onChangeDefault,
-        )
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            DeletionCard(viewModel.deletedIn(DialViewModel.weekWindow), stringResource(R.string.deleted_week_label), Accent)
+            DeletionCard(viewModel.deletedIn(DialViewModel.monthWindow), stringResource(R.string.deleted_month_label), StatHoney)
+            DeletionCard(viewModel.deletedIn(DialViewModel.yearWindow), stringResource(R.string.deleted_year_label), StatLilac)
+            StatTable(
+                title = stringResource(R.string.deleted_life_label),
+                recognized = state.deletedKnown,
+                unrecognized = state.deletedUnknown,
+                bulk = state.deletedBulk,
+                color = StatCoral,
+            )
+            StatsActions(
+                isDialer = state.isDialer,
+                showVoicemail = state.isDialer && !state.hasVoicemailPermission,
+                showContacts = state.isDialer && !state.hasContactsPermission,
+                becomeLabel = stringResource(R.string.become_dialer),
+                voicemailLabel = stringResource(R.string.allow_voicemail),
+                contactsLabel = stringResource(R.string.allow_contacts),
+                onBecome = viewModel::requestDialerRole,
+                onVoicemail = viewModel::requestVoicemailPermission,
+                onContacts = viewModel::requestContactsPermission,
+            )
+        }
     }
 }
 
@@ -419,13 +450,11 @@ private fun MailboxPage(viewModel: DialViewModel, state: DialUiState, tab: Mailb
             presentVoicemails(state.entries).isEmpty(),
         samsungNote = stringResource(R.string.samsung_note),
         thresholdLabel = stringResource(R.string.threshold_label),
-        speakerOn = state.speakerOn,
         deleteLabel = pluralStringResource(R.plurals.delete_button, bulk, bulk),
         deleteEnabled = state.isDialer && !state.busy && bulk > 0,
         busy = state.busy,
         onTab = viewModel::showMailbox,
         onThreshold = viewModel::setThreshold,
-        onSpeaker = viewModel::toggleSpeaker,
         onDelete = { viewModel.askDeleteVisible(tab) },
         onPlay = viewModel::play,
         onDeleteOne = viewModel::askDeleteOne,

@@ -40,6 +40,7 @@ fun RaggedCard(
     ink: Color = TitleInk,
     stroke: Color = DigitStroke,
     modifier: Modifier = Modifier,
+    overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
     var headerBottom by remember { mutableFloatStateOf(0f) }
@@ -94,6 +95,7 @@ fun RaggedCard(
                 content = content,
             )
         }
+        overlay()
     }
 }
 

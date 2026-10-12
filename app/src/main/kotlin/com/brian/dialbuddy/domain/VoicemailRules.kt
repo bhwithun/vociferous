@@ -9,9 +9,24 @@ data class VoicemailEntry(
     val deleted: Boolean = false,
 )
 
+data class DeletionCounts(
+    val known: Int = 0,
+    val unknown: Int = 0,
+    val bulk: Int = 0,
+) {
+    val total: Long
+        get() = known.toLong() + unknown + bulk
+
+    operator fun plus(other: DeletionCounts) = DeletionCounts(
+        known = known + other.known,
+        unknown = unknown + other.unknown,
+        bulk = bulk + other.bulk,
+    )
+}
+
 data class DeletionStamp(
     val atMillis: Long,
-    val count: Int,
+    val counts: DeletionCounts,
 )
 
 const val DEFAULT_THRESHOLD_SECONDS = 3
@@ -34,6 +49,9 @@ fun VoicemailEntry.isEmpty(thresholdSeconds: Int): Boolean {
 
 fun presentVoicemails(entries: List<VoicemailEntry>): List<VoicemailEntry> =
     entries.filterNot { it.deleted }
+
+fun voicemailById(entries: List<VoicemailEntry>, id: Long): VoicemailEntry? =
+    presentVoicemails(entries).firstOrNull { it.id == id }
 
 fun emptyVoicemails(entries: List<VoicemailEntry>, thresholdSeconds: Int): List<VoicemailEntry> {
     val threshold = clampThreshold(thresholdSeconds)
@@ -58,19 +76,33 @@ fun bulkVoicemails(
     }
 }
 
+fun tallyDeletions(recognized: List<Boolean>, bulkButton: Boolean): DeletionCounts {
+    var known = 0
+    var unknown = 0
+    var bulk = 0
+    for (isRecognized in recognized) {
+        when {
+            isRecognized -> known++
+            bulkButton -> bulk++
+            else -> unknown++
+        }
+    }
+    return DeletionCounts(known = known, unknown = unknown, bulk = bulk)
+}
+
 fun nextDeletedTotal(previousTotal: Long, deletedNow: Int): Long {
     require(previousTotal >= 0) { "total cannot be negative" }
     require(deletedNow >= 0) { "deletedNow cannot be negative" }
     return deletedNow + previousTotal
 }
 
-fun deletedInWindow(stamps: List<DeletionStamp>, nowMillis: Long, windowMillis: Long): Long {
+fun deletedInWindow(stamps: List<DeletionStamp>, nowMillis: Long, windowMillis: Long): DeletionCounts {
     require(windowMillis >= 0) { "window cannot be negative" }
     val start = nowMillis - windowMillis
-    var sum = 0L
+    var sum = DeletionCounts()
     for (stamp in stamps) {
-        if (stamp.count > 0 && stamp.atMillis in start..nowMillis) {
-            sum += stamp.count
+        if (stamp.counts.total > 0 && stamp.atMillis in start..nowMillis) {
+            sum += stamp.counts
         }
     }
     return sum
@@ -78,21 +110,25 @@ fun deletedInWindow(stamps: List<DeletionStamp>, nowMillis: Long, windowMillis: 
 
 fun retainRecentStamps(stamps: List<DeletionStamp>, nowMillis: Long): List<DeletionStamp> {
     val start = nowMillis - WINDOW_YEAR_MILLIS
-    return stamps.filter { it.count > 0 && it.atMillis >= start }
+    return stamps.filter { it.counts.total > 0 && it.atMillis >= start }
 }
 
 fun parseDeletionStamps(stored: String): List<DeletionStamp> {
     if (stored.isBlank()) return emptyList()
     return stored.split(';').mapNotNull { piece ->
         val parts = piece.split(':')
-        if (parts.size != 2) return@mapNotNull null
-        val at = parts[0].toLongOrNull() ?: return@mapNotNull null
-        val count = parts[1].toIntOrNull() ?: return@mapNotNull null
-        if (count <= 0) return@mapNotNull null
-        DeletionStamp(at, count)
+        val at = parts.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
+        val numbers = parts.drop(1).map { it.toIntOrNull() ?: return@mapNotNull null }
+        if (numbers.size !in 3..4 || numbers.any { it < 0 }) return@mapNotNull null
+        val counts = DeletionCounts(known = numbers[0], unknown = numbers[1], bulk = numbers[2])
+        if (counts.total <= 0) return@mapNotNull null
+        DeletionStamp(at, counts)
     }
 }
 
 fun formatDeletionStamps(stamps: List<DeletionStamp>): String =
-    stamps.joinToString(";") { "${it.atMillis}:${it.count}" }
+    stamps.joinToString(";") { stamp ->
+        val counts = stamp.counts
+        "${stamp.atMillis}:${counts.known}:${counts.unknown}:${counts.bulk}"
+    }
 

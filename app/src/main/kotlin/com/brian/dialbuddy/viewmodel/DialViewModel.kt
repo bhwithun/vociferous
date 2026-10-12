@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.brian.dialbuddy.R
 import com.brian.dialbuddy.data.AppStorage
+import com.brian.dialbuddy.domain.DeletionCounts
 import com.brian.dialbuddy.domain.DeletionStamp
 import com.brian.dialbuddy.domain.DEFAULT_THRESHOLD_SECONDS
 import com.brian.dialbuddy.domain.VoicemailEntry
@@ -21,6 +22,8 @@ import com.brian.dialbuddy.domain.parseDeletionStamps
 import com.brian.dialbuddy.domain.presentVoicemails
 import com.brian.dialbuddy.domain.qualifiesForBulkDelete
 import com.brian.dialbuddy.domain.retainRecentStamps
+import com.brian.dialbuddy.domain.tallyDeletions
+import com.brian.dialbuddy.domain.voicemailById
 import com.brian.dialbuddy.domain.WINDOW_MONTH_MILLIS
 import com.brian.dialbuddy.domain.WINDOW_WEEK_MILLIS
 import com.brian.dialbuddy.domain.WINDOW_YEAR_MILLIS
@@ -81,6 +84,9 @@ data class DialUiState(
     val speakerOn: Boolean = false,
     val stamps: List<DeletionStamp> = emptyList(),
     val deletedLife: Long = 0,
+    val deletedKnown: Long = 0,
+    val deletedUnknown: Long = 0,
+    val deletedBulk: Long = 0,
     val pendingConfirm: PendingConfirm? = null,
     val toast: String? = null,
     val loaded: Boolean = false,
@@ -123,8 +129,16 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
             val threshold = clampThreshold(
                 storage.getIntOnce(AppStorage.Keys.THRESHOLD, DEFAULT_THRESHOLD_SECONDS),
             )
-            val stamps = parseDeletionStamps(storage.getStringOnce(AppStorage.Keys.DELETION_STAMPS))
+            val storedStamps = storage.getStringOnce(AppStorage.Keys.DELETION_STAMPS)
+            val stamps = parseDeletionStamps(storedStamps)
+            val keptStamps = formatDeletionStamps(stamps)
+            if (keptStamps != storedStamps) {
+                storage.setString(AppStorage.Keys.DELETION_STAMPS, keptStamps)
+            }
             val total = storage.getLongOnce(AppStorage.Keys.DELETED_TOTAL)
+            val known = storage.getLongOnce(AppStorage.Keys.DELETED_KNOWN)
+            val unknown = storage.getLongOnce(AppStorage.Keys.DELETED_UNKNOWN)
+            val bulk = storage.getLongOnce(AppStorage.Keys.DELETED_BULK)
             val speaker = storage.getBooleanOnce(AppStorage.Keys.SPEAKER)
             player.setSpeaker(speaker)
             _state.update {
@@ -132,6 +146,9 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
                     thresholdSeconds = threshold,
                     stamps = stamps,
                     deletedLife = total,
+                    deletedKnown = known,
+                    deletedUnknown = unknown,
+                    deletedBulk = bulk,
                     speakerOn = speaker,
                     loaded = true,
                 )
@@ -407,8 +424,9 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun askDeleteOne(id: Long) {
-        val row = visibleRows(_state.value).firstOrNull { it.entry.id == id } ?: return
-        val label = row.contactName ?: getApplication<Application>().getString(R.string.unknown_caller)
+        val entry = voicemailById(_state.value.entries, id) ?: return
+        val label = _state.value.contacts[entry.number]
+            ?: getApplication<Application>().getString(R.string.unknown_caller)
         _state.update { it.copy(pendingConfirm = PendingConfirm.One(id, label)) }
     }
 
@@ -419,8 +437,8 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
     fun confirmPending() {
         val pending = _state.value.pendingConfirm ?: return
         when (pending) {
-            is PendingConfirm.Bulk -> deleteIds(bulkTargets(_state.value).map { it.id }.toSet())
-            is PendingConfirm.One -> deleteIds(setOf(pending.id))
+            is PendingConfirm.Bulk -> deleteIds(bulkTargets(_state.value).map { it.id }.toSet(), bulk = true)
+            is PendingConfirm.One -> deleteIds(setOf(pending.id), bulk = false)
         }
     }
 
@@ -451,7 +469,7 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
     fun bulkCount(state: DialUiState = _state.value, tab: MailboxTab = state.mailboxTab): Int =
         bulkTargets(state.copy(mailboxTab = tab)).size
 
-    fun deletedIn(windowMillis: Long, nowMillis: Long = System.currentTimeMillis()): Long =
+    fun deletedIn(windowMillis: Long, nowMillis: Long = System.currentTimeMillis()): DeletionCounts =
         deletedInWindow(_state.value.stamps, nowMillis, windowMillis)
 
     private fun bulkTargets(state: DialUiState): List<VoicemailEntry> {
@@ -463,7 +481,7 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun deleteIds(ids: Set<Long>) {
+    private fun deleteIds(ids: Set<Long>, bulk: Boolean) {
         if (ids.isEmpty()) return
         val app = getApplication<Application>()
         _state.update { it.copy(pendingConfirm = null, busy = true) }
@@ -488,19 +506,29 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
             val updated = current.entries.map { entry ->
                 if (entry.id in removed) entry.copy(deleted = true) else entry
             }
-            val stamps = retainRecentStamps(current.stamps + DeletionStamp(now, removed.size), now)
+            val counts = deletionCounts(current, removed, bulk)
+            val stamps = retainRecentStamps(current.stamps + DeletionStamp(now, counts), now)
             val total = nextDeletedTotal(current.deletedLife, removed.size)
+            val known = nextDeletedTotal(current.deletedKnown, counts.known)
+            val unknown = nextDeletedTotal(current.deletedUnknown, counts.unknown)
+            val bulkTotal = nextDeletedTotal(current.deletedBulk, counts.bulk)
             _state.update {
                 it.copy(
                     entries = updated,
                     stamps = stamps,
                     deletedLife = total,
+                    deletedKnown = known,
+                    deletedUnknown = unknown,
+                    deletedBulk = bulkTotal,
                     busy = false,
                     toast = app.resources.getQuantityString(R.plurals.deleted_now, removed.size, removed.size),
                 )
             }
             storage.setString(AppStorage.Keys.DELETION_STAMPS, formatDeletionStamps(stamps))
             storage.setLong(AppStorage.Keys.DELETED_TOTAL, total)
+            storage.setLong(AppStorage.Keys.DELETED_KNOWN, known)
+            storage.setLong(AppStorage.Keys.DELETED_UNKNOWN, unknown)
+            storage.setLong(AppStorage.Keys.DELETED_BULK, bulkTotal)
         }
     }
 
@@ -544,6 +572,15 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
             today.minusDays(1) -> app.getString(R.string.date_yesterday)
             else -> day.format(java.time.format.DateTimeFormatter.ofPattern("EEEE MMMM d, yyyy"))
         }
+    }
+
+    private fun deletionCounts(state: DialUiState, removed: Set<Long>, bulk: Boolean): DeletionCounts {
+        val recognized = state.entries.mapNotNull { entry ->
+            if (entry.id !in removed) return@mapNotNull null
+            val number = entry.number?.trim().orEmpty()
+            number.isNotEmpty() && state.contacts[entry.number] != null
+        }
+        return tallyDeletions(recognized, bulkButton = bulk)
     }
 
     private fun toast(text: String) {
