@@ -4,6 +4,7 @@ let meta = #{
     when_to_use: "Work a ticket on bhwithun/vociferous. Pass args.issue to choose a number. Otherwise the oldest open issue that has no open pull request is used.",
     phases: [
         #{ title: "Pick", detail: "choose one open issue" },
+        #{ title: "Plan", detail: "comment on the ask, then mark the issue in progress" },
         #{ title: "Build", detail: "implement that issue and verify it" },
         #{ title: "Publish", detail: "push a branch, open a pull request, comment on the issue" },
     ],
@@ -61,8 +62,32 @@ if requested != () {
 }
 log("Working issue " + ticket);
 
+phase("Plan");
+let plan_prompt = "Plan GitHub issue " + ticket + " on bhwithun/vociferous before any code change. ";
+plan_prompt += "Read the issue with the GitHub MCP tools. Repo path for reading code only: C:\\Users\\brian\\AndroidProjects\\dial-buddy. ";
+plan_prompt += "Do not edit files, commit, or push. ";
+plan_prompt += "Post one issue comment, in this order, with these headings: ";
+plan_prompt += "Ask: restate what was requested and your understanding of it. ";
+plan_prompt += "Nature: explain the problem or the change request. ";
+plan_prompt += "Plan: a brief description of what you intend to do to resolve it. ";
+plan_prompt += "After that comment is posted, add the label \"in progress\" with github issue_write. ";
+plan_prompt += "Keep any labels already on the issue. Create the label with label_write if it is missing. ";
+plan_prompt += "Do not print contact names or phone numbers. ";
+plan_prompt += "If the comment fails, do not add the label. Final answer: the comment URL.";
+let planned = agent(plan_prompt, #{
+    label: "plan-" + ticket,
+    capability_mode: "execute",
+});
+if planned == () || planned.success != true {
+    complete(#{ summary: "Plan comment was not posted.", issue: ticket });
+}
+if type_of(planned.output) == "map" && planned.output.stub == true {
+    complete(#{ summary: "Smoke check.", stub: true, issue: ticket });
+}
+
 phase("Build");
 let build_prompt = "Implement GitHub issue " + ticket + " for the Vociferous Android app. ";
+build_prompt += "The plan comment is already on the issue and the issue is labeled in progress. Start on the code. ";
 build_prompt += "Repo path: C:\\Users\\brian\\AndroidProjects\\dial-buddy. ";
 build_prompt += "GitHub: https://github.com/bhwithun/vociferous/issues/" + ticket + ". ";
 build_prompt += "Read the issue with the GitHub MCP tools before editing. ";

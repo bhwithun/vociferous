@@ -26,4 +26,4 @@ On a Galaxy S22 the carrier list can stay inside Samsung Phone, so an empty shar
 
 ## Tickets
 
-Open an issue with the Ticket template. The `work-ticket` workflow takes the oldest open issue that does not already have a pull request, implements it on `ticket-<number>`, and opens a pull request. Pass an issue number when you want a specific one. One issue per run.
+Open an issue with the Ticket template. The `work-ticket` workflow takes the oldest open issue that does not already have a pull request. It comments with the ask, the nature of the change, and the intended fix, labels the issue `in progress`, implements it on `ticket-<number>`, and opens a pull request. Pass an issue number when you want a specific one. One issue per run.
