@@ -43,6 +43,14 @@ enum class MainPage { Voicemail, Keypad }
 
 enum class MailboxTab { Known, Unknown, Stats }
 
+fun visibleMailboxTabs(knownCount: Int, unknownCount: Int): List<MailboxTab> {
+    val tabs = ArrayList<MailboxTab>(3)
+    if (knownCount > 0) tabs.add(MailboxTab.Known)
+    if (unknownCount > 0) tabs.add(MailboxTab.Unknown)
+    tabs.add(MailboxTab.Stats)
+    return tabs
+}
+
 data class MailboxRow(
     val entry: VoicemailEntry,
     val contactName: String?,
