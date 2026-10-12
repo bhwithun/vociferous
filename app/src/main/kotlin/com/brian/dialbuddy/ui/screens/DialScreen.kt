@@ -71,6 +71,7 @@ import com.brian.dialbuddy.viewmodel.DialUiState
 import com.brian.dialbuddy.viewmodel.DialViewModel
 import com.brian.dialbuddy.viewmodel.MailboxTab
 import com.brian.dialbuddy.viewmodel.PendingConfirm
+import com.brian.dialbuddy.viewmodel.visibleMailboxTabs
 
 private const val PHONE = 0
 private const val VOICEMAIL = 1
@@ -87,7 +88,9 @@ fun DialScreen(
     var section by remember { mutableIntStateOf(PHONE) }
     var wasInCall by remember { mutableStateOf(false) }
     val phonePager = rememberPagerState(initialPage = 0) { if (callActive) 2 else 1 }
-    val mailPager = rememberPagerState(initialPage = 0) { 3 }
+    val mailCards = visibleMailboxTabs(viewModel.knownCount(state), viewModel.unknownCount(state))
+    val mailPager = rememberPagerState(initialPage = 0) { mailCards.size }
+    var shownMailCard by remember { mutableStateOf<MailboxTab?>(null) }
     LaunchedEffect(state.toast) {
         val message = state.toast ?: return@LaunchedEffect
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -108,6 +111,24 @@ fun DialScreen(
             phonePager.scrollToPage(0)
         }
         wasInCall = callActive
+    }
+    LaunchedEffect(mailPager.settledPage, mailCards) {
+        mailCards.getOrNull(mailPager.settledPage)?.let { shownMailCard = it }
+    }
+    LaunchedEffect(mailCards) {
+        if (mailPager.currentPage >= mailCards.size) {
+            mailPager.scrollToPage(mailCards.lastIndex)
+        }
+        val current = shownMailCard ?: return@LaunchedEffect
+        val at = mailCards.getOrNull(mailPager.currentPage)
+        if (current in mailCards && at == current) return@LaunchedEffect
+        val preferred = when {
+            current in mailCards -> current
+            current == MailboxTab.Known && MailboxTab.Unknown in mailCards -> MailboxTab.Unknown
+            else -> mailCards.last()
+        }
+        val target = mailCards.indexOf(preferred)
+        if (target >= 0 && mailPager.currentPage != target) mailPager.scrollToPage(target)
     }
     Column(
         Modifier
@@ -157,23 +178,24 @@ fun DialScreen(
                 }
             }
         } else {
-            PageDots(page = mailPager.currentPage, count = 3, color = TitleBand)
+            PageDots(page = mailPager.currentPage, count = mailCards.size, color = TitleBand)
             HorizontalPager(
                 state = mailPager,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 pageSpacing = 20.dp,
             ) { page ->
+                val card = mailCards[page]
                 PageCard(
-                    seed = page + 2,
-                    title = mailTitle(page),
+                    seed = card.ordinal + 2,
+                    title = mailTitle(card),
                     band = TitleBand,
                     ink = TitleInk,
                     stroke = DigitStroke,
                 ) {
-                    when (page) {
-                        0 -> MailboxPage(viewModel, state, MailboxTab.Known)
-                        1 -> MailboxPage(viewModel, state, MailboxTab.Unknown)
-                        else -> StatsPage(viewModel, state, onChangeDefault)
+                    if (card == MailboxTab.Stats) {
+                        StatsPage(viewModel, state, onChangeDefault)
+                    } else {
+                        MailboxPage(viewModel, state, card)
                     }
                 }
             }
@@ -313,11 +335,11 @@ private fun VoicemailTabIcon(color: Color) {
 }
 
 @Composable
-private fun mailTitle(page: Int): String {
-    return when (page) {
-        0 -> stringResource(R.string.tab_known)
-        1 -> stringResource(R.string.tab_unknown)
-        else -> stringResource(R.string.tab_settings)
+private fun mailTitle(card: MailboxTab): String {
+    return when (card) {
+        MailboxTab.Known -> stringResource(R.string.tab_known)
+        MailboxTab.Unknown -> stringResource(R.string.tab_unknown)
+        MailboxTab.Stats -> stringResource(R.string.tab_settings)
     }
 }
 
