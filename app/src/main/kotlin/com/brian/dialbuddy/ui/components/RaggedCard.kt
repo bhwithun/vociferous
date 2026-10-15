@@ -39,6 +39,7 @@ fun RaggedCard(
     band: Color = TitleBand,
     ink: Color = TitleInk,
     stroke: Color = DigitStroke,
+    body: Color = Color.Transparent,
     modifier: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
@@ -47,6 +48,9 @@ fun RaggedCard(
     Box(
         modifier.drawBehind {
             val path = raggedWirePath(seed)
+            if (body.alpha > 0f) {
+                drawPath(path, body)
+            }
             if (headerBottom > 0f) {
                 val cap = Path().apply {
                     addRect(Rect(0f, 0f, size.width, headerBottom))

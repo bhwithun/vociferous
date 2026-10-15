@@ -2,6 +2,22 @@
 <resources>
     <string name="app_name">Vociferous</string>
     <string name="tab_phone">Phone</string>
+    <string name="tab_history">History</string>
+    <string name="history_recognized">Recognized</string>
+    <string name="history_unrecognized">Unrecognized</string>
+    <string name="history_empty_recognized">No calls from recognized numbers.</string>
+    <string name="history_empty_unrecognized">No calls from unrecognized numbers.</string>
+    <string name="history_need_role">Call history appears here after this is the Phone app.</string>
+    <string name="history_denied">The phone refused call history.</string>
+    <string name="allow_call_log">Allow call history</string>
+    <string name="private_number">Private number</string>
+    <string name="call_incoming">Incoming</string>
+    <string name="call_outgoing">Outgoing</string>
+    <string name="call_missed">Missed</string>
+    <string name="call_rejected">Declined</string>
+    <string name="call_blocked">Blocked</string>
+    <string name="call_voicemail">Voicemail</string>
+    <string name="call_other">Call</string>
     <string name="tab_voicemail">Voicemail</string>
     <string name="tab_voicemail_count">Voicemail (%1$d)</string>
     <string name="bluetooth">Bluetooth</string>

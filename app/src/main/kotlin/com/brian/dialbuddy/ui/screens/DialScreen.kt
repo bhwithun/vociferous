@@ -1,5 +1,8 @@
 package com.brian.dialbuddy.ui.screens
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -46,12 +49,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.brian.dialbuddy.R
 import com.brian.dialbuddy.domain.DeletionCounts
 import com.brian.dialbuddy.domain.presentVoicemails
 import com.brian.dialbuddy.telecom.Calls
+import com.brian.dialbuddy.ui.components.HistoryPage
 import com.brian.dialbuddy.ui.components.KeypadPane
 import com.brian.dialbuddy.ui.components.MailboxPane
 import com.brian.dialbuddy.ui.components.RaggedCard
@@ -61,6 +66,10 @@ import com.brian.dialbuddy.ui.components.StatsActions
 import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.DigitStroke
 import com.brian.dialbuddy.ui.theme.Forest
+import com.brian.dialbuddy.ui.theme.HistoryBand
+import com.brian.dialbuddy.ui.theme.HistoryBody
+import com.brian.dialbuddy.ui.theme.HistoryInk
+import com.brian.dialbuddy.ui.theme.HistoryStroke
 import com.brian.dialbuddy.ui.theme.InkMuted
 import com.brian.dialbuddy.ui.theme.PhoneBand
 import com.brian.dialbuddy.ui.theme.PhoneInk
@@ -77,7 +86,8 @@ import com.brian.dialbuddy.viewmodel.PendingConfirm
 import com.brian.dialbuddy.viewmodel.visibleMailboxTabs
 
 private const val PHONE = 0
-private const val VOICEMAIL = 1
+private const val HISTORY = 1
+private const val VOICEMAIL = 2
 
 @Composable
 fun DialScreen(
@@ -85,6 +95,7 @@ fun DialScreen(
     state: DialUiState,
 ) {
     val context = LocalContext.current
+    val versionName = remember(context) { appVersionName(context) }
     val inCall by Calls.state.collectAsState()
     val callActive = inCall.calls.isNotEmpty()
     var section by remember { mutableIntStateOf(PHONE) }
@@ -92,6 +103,7 @@ fun DialScreen(
     val phonePager = rememberPagerState(initialPage = 0) { if (callActive) 2 else 1 }
     val mailCards = visibleMailboxTabs(viewModel.knownCount(state), viewModel.unknownCount(state))
     val mailPager = rememberPagerState(initialPage = 0) { mailCards.size }
+    val historyPager = rememberPagerState(initialPage = 0) { 2 }
     var shownMailCard by remember { mutableStateOf<MailboxTab?>(null) }
     LaunchedEffect(state.toast) {
         val message = state.toast ?: return@LaunchedEffect
@@ -151,7 +163,11 @@ fun DialScreen(
             ) { page ->
                 PageCard(
                     seed = page,
-                    title = if (page == 1 && callActive) stringResource(R.string.state_call) else null,
+                    title = if (page == 1 && callActive) {
+                        stringResource(R.string.state_call)
+                    } else {
+                        versionName.takeIf { it.isNotBlank() }
+                    },
                     band = PhoneBand,
                     ink = PhoneInk,
                     stroke = PhoneStroke,
@@ -177,6 +193,36 @@ fun DialScreen(
                     } else {
                         InCallPane(inCall, Modifier.fillMaxSize())
                     }
+                }
+            }
+        } else if (section == HISTORY) {
+            PageDots(page = historyPager.currentPage, count = 2, color = HistoryBand)
+            HorizontalPager(
+                state = historyPager,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                pageSpacing = 20.dp,
+            ) { page ->
+                val recognized = page == 0
+                PageCard(
+                    seed = page + 20,
+                    title = stringResource(
+                        if (recognized) R.string.history_recognized else R.string.history_unrecognized,
+                    ),
+                    band = HistoryBand,
+                    ink = HistoryInk,
+                    stroke = HistoryStroke,
+                    body = HistoryBody,
+                ) {
+                    HistoryPage(
+                        rows = viewModel.historyRows(recognized, state),
+                        recognized = recognized,
+                        access = state.historyAccess,
+                        onCall = viewModel::requestCall,
+                        onViewContact = viewModel::openContact,
+                        onBecomeDialer = viewModel::requestDialerRole,
+                        onAllow = viewModel::requestCallLogPermission,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
         } else {
@@ -229,6 +275,14 @@ fun DialScreen(
                 icon = { color -> PhoneTabIcon(color) },
             ) { section = PHONE }
             BottomTab(
+                stringResource(R.string.tab_history),
+                section == HISTORY,
+                HistoryBand,
+                HistoryInk,
+                Modifier.weight(1f),
+                icon = { color -> HistoryTabIcon(color) },
+            ) { section = HISTORY }
+            BottomTab(
                 stringResource(
                     R.string.tab_voicemail_count,
                     viewModel.knownCount(state) + viewModel.unknownCount(state),
@@ -264,6 +318,7 @@ private fun PageCard(
     band: Color,
     ink: Color,
     stroke: Color,
+    body: Color = Color.Transparent,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
@@ -273,6 +328,7 @@ private fun PageCard(
         band = band,
         ink = ink,
         stroke = stroke,
+        body = body,
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -308,7 +364,14 @@ private fun BottomTab(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         icon(ink)
-        Text(label, color = ink, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+        Text(
+            label,
+            color = ink,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
+        )
     }
 }
 
@@ -327,6 +390,31 @@ private fun PhoneTabIcon(color: Color) {
             color = color,
             start = Offset(size.width * 0.4f, size.height * 0.22f),
             end = Offset(size.width * 0.6f, size.height * 0.22f),
+            strokeWidth = 1.6.dp.toPx(),
+        )
+    }
+}
+
+@Composable
+private fun HistoryTabIcon(color: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val stroke = Stroke(width = 1.6.dp.toPx())
+        drawCircle(
+            color = color,
+            radius = size.minDimension * 0.42f,
+            center = center,
+            style = stroke,
+        )
+        drawLine(
+            color = color,
+            start = center,
+            end = Offset(center.x, size.height * 0.22f),
+            strokeWidth = 1.6.dp.toPx(),
+        )
+        drawLine(
+            color = color,
+            start = center,
+            end = Offset(size.width * 0.72f, center.y),
             strokeWidth = 1.6.dp.toPx(),
         )
     }
@@ -356,6 +444,19 @@ private fun mailTitle(card: MailboxTab): String {
         MailboxTab.Unknown -> stringResource(R.string.tab_unknown)
         MailboxTab.Stats -> stringResource(R.string.tab_settings)
     }
+}
+
+private fun appVersionName(context: Context): String {
+    val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }
+    return info.versionName.orEmpty()
 }
 
 private fun sectionDots(page: Int, count: Int): String {
