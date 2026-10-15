@@ -67,7 +67,6 @@ import com.brian.dialbuddy.ui.theme.HistoryBand
 import com.brian.dialbuddy.ui.theme.HistoryBody
 import com.brian.dialbuddy.ui.theme.HistoryInk
 import com.brian.dialbuddy.ui.theme.HistoryStroke
-import com.brian.dialbuddy.ui.theme.InkMuted
 import com.brian.dialbuddy.ui.theme.PhoneBand
 import com.brian.dialbuddy.ui.theme.PhoneInk
 import com.brian.dialbuddy.ui.theme.PhoneStroke
@@ -261,18 +260,18 @@ fun DialScreen(
         ) {
             BottomTab(
                 stringResource(R.string.tab_phone),
-                section == PHONE,
-                PhoneBand,
-                PhoneInk,
-                Modifier.weight(1f),
+                fill = if (section == PHONE) PhoneBand else Forest,
+                ink = if (section == PHONE) PhoneInk else PhoneBand,
+                edge = PhoneStroke,
+                modifier = Modifier.weight(1f),
                 icon = { color -> PhoneTabIcon(color) },
             ) { section = PHONE }
             BottomTab(
                 stringResource(R.string.tab_history),
-                section == HISTORY,
-                HistoryBand,
-                HistoryInk,
-                Modifier.weight(1f),
+                fill = if (section == HISTORY) HistoryBand else HistoryBody,
+                ink = if (section == HISTORY) HistoryInk else HistoryBand,
+                edge = HistoryStroke,
+                modifier = Modifier.weight(1f),
                 icon = { color -> HistoryTabIcon(color) },
             ) { section = HISTORY }
             BottomTab(
@@ -280,10 +279,10 @@ fun DialScreen(
                     R.string.tab_voicemail_count,
                     viewModel.knownCount(state) + viewModel.unknownCount(state),
                 ),
-                section == VOICEMAIL,
-                TitleBand,
-                TitleInk,
-                Modifier.weight(1f),
+                fill = if (section == VOICEMAIL) TitleBand else Forest,
+                ink = if (section == VOICEMAIL) TitleInk else TitleBand,
+                edge = DigitStroke,
+                modifier = Modifier.weight(1f),
                 icon = { color -> VoicemailTabIcon(color) },
             ) { section = VOICEMAIL }
         }
@@ -336,16 +335,13 @@ private val tabShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)
 @Composable
 private fun BottomTab(
     label: String,
-    selected: Boolean,
-    selectedFill: Color,
-    selectedInk: Color,
+    fill: Color,
+    ink: Color,
+    edge: Color,
     modifier: Modifier,
     icon: @Composable (Color) -> Unit,
     onClick: () -> Unit,
 ) {
-    val fill = if (selected) selectedFill else Forest
-    val ink = if (selected) selectedInk else InkMuted
-    val edge = if (selected) selectedFill else DigitStroke
     Column(
         modifier
             .fillMaxSize()
