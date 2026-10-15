@@ -15,10 +15,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,10 +58,28 @@ fun HistoryPage(
     access: HistoryAccess,
     onCall: (String) -> Unit,
     onViewContact: (String) -> Unit,
+    onAddContact: (String) -> Unit,
     onBecomeDialer: () -> Unit,
     onAllow: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var numberToAdd by remember { mutableStateOf<String?>(null) }
+    numberToAdd?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { numberToAdd = null },
+            title = { Text(stringResource(R.string.add_contact_title)) },
+            text = { Text(stringResource(R.string.add_contact_message, pending)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    numberToAdd = null
+                    onAddContact(pending)
+                }) { Text(stringResource(R.string.add_contact)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { numberToAdd = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
     Column(modifier) {
         if (access != HistoryAccess.Ready && access != HistoryAccess.Loading) {
             val message = when (access) {
@@ -113,7 +137,7 @@ fun HistoryPage(
                     )
                 }
                 items(calls, key = { "call-${it.record.id}" }) { row ->
-                    HistoryRowView(row, onCall, onViewContact)
+                    HistoryRowView(row, onCall, onViewContact) { numberToAdd = it }
                 }
             }
         }
@@ -125,6 +149,7 @@ private fun HistoryRowView(
     row: HistoryRow,
     onCall: (String) -> Unit,
     onViewContact: (String) -> Unit,
+    onOfferAdd: (String) -> Unit,
 ) {
     val number = row.record.number
     val title = row.contactName
@@ -155,10 +180,10 @@ private fun HistoryRowView(
                     .clip(CircleShape)
                     .background(HistoryWell)
                     .then(
-                        if (row.contactName != null) {
-                            Modifier.clickable { onViewContact(number) }
-                        } else {
-                            Modifier
+                        when {
+                            row.contactName != null -> Modifier.clickable { onViewContact(number) }
+                            number.isNotBlank() -> Modifier.clickable { onOfferAdd(number) }
+                            else -> Modifier
                         },
                     ),
                 contentAlignment = Alignment.Center,

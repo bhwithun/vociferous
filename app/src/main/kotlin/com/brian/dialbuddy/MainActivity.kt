@@ -2,9 +2,11 @@ package com.brian.dialbuddy
 
 import android.Manifest
 import android.app.role.RoleManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.telecom.TelecomManager
 import android.widget.Toast
@@ -129,6 +131,7 @@ class MainActivity : ComponentActivity() {
                     is DialCommand.RequestPermissions -> permissionLauncher.launch(command.permissions)
                     DialCommand.BrowseContacts -> openContacts()
                     is DialCommand.ViewContact -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(command.uri)))
+                    is DialCommand.InsertContact -> insertContact(command.number)
                 }
             }
         }
@@ -168,6 +171,18 @@ class MainActivity : ComponentActivity() {
         }
         skipRolePrompt = true
         roleLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+    }
+
+    private fun insertContact(number: String) {
+        val intent = Intent(ContactsContract.Intents.Insert.ACTION).apply {
+            type = ContactsContract.RawContacts.CONTENT_TYPE
+            putExtra(ContactsContract.Intents.Insert.PHONE, number)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.add_contact_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun openContacts() {

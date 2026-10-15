@@ -117,6 +117,7 @@ sealed class DialCommand {
     data object RequestDialerRole : DialCommand()
     data object BrowseContacts : DialCommand()
     data class ViewContact(val uri: String) : DialCommand()
+    data class InsertContact(val number: String) : DialCommand()
     data class RequestPermissions(val permissions: Array<String>) : DialCommand() {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -469,6 +470,11 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
             openContact(contactNumber)
         }
         lookupDialContact()
+    }
+
+    fun addContact(number: String) {
+        if (number.isBlank()) return
+        _commands.tryEmit(DialCommand.InsertContact(number))
     }
 
     fun openContact(number: String?) {

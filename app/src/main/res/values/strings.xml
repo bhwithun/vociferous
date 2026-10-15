@@ -11,6 +11,10 @@
     <string name="history_denied">The phone refused call history.</string>
     <string name="allow_call_log">Allow call history</string>
     <string name="private_number">Private number</string>
+    <string name="add_contact_title">Add contact</string>
+    <string name="add_contact_message">Add %1$s as a contact?</string>
+    <string name="add_contact">Add</string>
+    <string name="add_contact_failed">The contacts app could not be opened.</string>
     <string name="call_incoming">Incoming</string>
     <string name="call_outgoing">Outgoing</string>
     <string name="call_missed">Missed</string>

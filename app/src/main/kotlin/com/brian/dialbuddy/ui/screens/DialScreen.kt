@@ -211,6 +211,7 @@ fun DialScreen(
                         access = state.historyAccess,
                         onCall = viewModel::requestCall,
                         onViewContact = viewModel::openContact,
+                        onAddContact = viewModel::addContact,
                         onBecomeDialer = viewModel::requestDialerRole,
                         onAllow = viewModel::requestCallLogPermission,
                         modifier = Modifier.fillMaxSize(),
