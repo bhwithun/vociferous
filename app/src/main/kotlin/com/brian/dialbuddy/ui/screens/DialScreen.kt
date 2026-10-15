@@ -1,8 +1,5 @@
 package com.brian.dialbuddy.ui.screens
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -95,7 +92,6 @@ fun DialScreen(
     state: DialUiState,
 ) {
     val context = LocalContext.current
-    val versionName = remember(context) { appVersionName(context) }
     val inCall by Calls.state.collectAsState()
     val callActive = inCall.calls.isNotEmpty()
     var section by remember { mutableIntStateOf(PHONE) }
@@ -163,11 +159,7 @@ fun DialScreen(
             ) { page ->
                 PageCard(
                     seed = page,
-                    title = if (page == 1 && callActive) {
-                        stringResource(R.string.state_call)
-                    } else {
-                        versionName.takeIf { it.isNotBlank() }
-                    },
+                    title = if (page == 1 && callActive) stringResource(R.string.state_call) else null,
                     band = PhoneBand,
                     ink = PhoneInk,
                     stroke = PhoneStroke,
@@ -246,7 +238,7 @@ fun DialScreen(
                                 onClick = viewModel::toggleSpeaker,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .padding(top = 10.dp, end = 16.dp),
+                                    .padding(top = 48.dp, end = 16.dp),
                             )
                         }
                     },
@@ -444,19 +436,6 @@ private fun mailTitle(card: MailboxTab): String {
         MailboxTab.Unknown -> stringResource(R.string.tab_unknown)
         MailboxTab.Stats -> stringResource(R.string.tab_settings)
     }
-}
-
-private fun appVersionName(context: Context): String {
-    val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.packageManager.getPackageInfo(
-            context.packageName,
-            PackageManager.PackageInfoFlags.of(0),
-        )
-    } else {
-        @Suppress("DEPRECATION")
-        context.packageManager.getPackageInfo(context.packageName, 0)
-    }
-    return info.versionName.orEmpty()
 }
 
 private fun sectionDots(page: Int, count: Int): String {

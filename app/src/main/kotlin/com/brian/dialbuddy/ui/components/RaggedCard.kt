@@ -1,5 +1,8 @@
 package com.brian.dialbuddy.ui.components
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,6 +49,8 @@ fun RaggedCard(
     content: @Composable BoxScope.() -> Unit,
 ) {
     var headerBottom by remember { mutableFloatStateOf(0f) }
+    val context = LocalContext.current
+    val version = remember(context) { appVersionName(context) }
     Box(
         modifier.drawBehind {
             val path = raggedWirePath(seed)
@@ -70,24 +76,30 @@ fun RaggedCard(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .onSizeChanged { headerBottom = it.height.toFloat() },
+                    .onSizeChanged { headerBottom = it.height.toFloat() }
+                    .padding(top = 14.dp, bottom = 8.dp)
+                    .padding(start = 28.dp, end = 12.dp),
             ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 18.dp, bottom = if (title == null) 8.dp else 10.dp)
-                        .padding(horizontal = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    if (title != null) {
-                        Text(
-                            text = title,
-                            color = ink,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
+                if (title != null) {
+                    Text(
+                        text = title,
+                        color = ink,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 52.dp),
+                    )
+                }
+                if (version.isNotBlank()) {
+                    Text(
+                        text = version,
+                        color = ink,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    )
                 }
             }
             Box(
@@ -101,6 +113,19 @@ fun RaggedCard(
         }
         overlay()
     }
+}
+
+private fun appVersionName(context: Context): String {
+    val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0),
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0)
+    }
+    return info.versionName.orEmpty()
 }
 
 private fun DrawScope.raggedWirePath(seed: Int): Path {
