@@ -4,9 +4,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +20,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +33,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,7 +47,10 @@ import com.brian.dialbuddy.R
 import com.brian.dialbuddy.domain.CallKind
 import com.brian.dialbuddy.domain.callDurationClock
 import com.brian.dialbuddy.ui.theme.Danger
+import coil.compose.AsyncImage
 import com.brian.dialbuddy.ui.theme.HistoryBand
+import com.brian.dialbuddy.ui.theme.HistoryBody
+import com.brian.dialbuddy.ui.theme.HistoryStroke
 import com.brian.dialbuddy.ui.theme.HistoryInk
 import com.brian.dialbuddy.ui.theme.HistoryMuted
 import com.brian.dialbuddy.ui.theme.HistoryText
@@ -49,6 +61,68 @@ import com.brian.dialbuddy.viewmodel.HistoryRow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+@Composable
+fun CallsMenu(
+    showRecognized: Boolean,
+    showUnrecognized: Boolean,
+    onRecognized: () -> Unit,
+    onUnrecognized: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!showRecognized && !showUnrecognized) return
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(R.string.calls_menu)
+    val itemColors = MenuDefaults.itemColors(textColor = HistoryText)
+    Column(modifier) {
+        Canvas(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(HistoryBody)
+                .border(1.dp, HistoryStroke, CircleShape)
+                .clickable { open = true }
+                .semantics { contentDescription = label }
+                .padding(8.dp),
+        ) {
+            val stroke = 1.8.dp.toPx()
+            listOf(0.22f, 0.5f, 0.78f).forEach { y ->
+                drawLine(
+                    color = HistoryBand,
+                    start = Offset(size.width * 0.12f, size.height * y),
+                    end = Offset(size.width * 0.88f, size.height * y),
+                    strokeWidth = stroke,
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = HistoryBody,
+        ) {
+            if (showRecognized) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.history_recognized)) },
+                    onClick = {
+                        open = false
+                        onRecognized()
+                    },
+                    colors = itemColors,
+                )
+            }
+            if (showUnrecognized) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.history_unrecognized)) },
+                    onClick = {
+                        open = false
+                        onUnrecognized()
+                    },
+                    colors = itemColors,
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -174,6 +248,7 @@ private fun HistoryRowView(
             modifier = Modifier.width(84.dp),
         ) {
             val mark = row.contactName?.firstOrNull()?.uppercase() ?: stringResource(R.string.unknown_mark)
+            var photoFailed by remember(row.photoUri) { mutableStateOf(false) }
             Box(
                 Modifier
                     .size(64.dp)
@@ -188,7 +263,18 @@ private fun HistoryRowView(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(mark, color = LilacLight, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                val photo = row.photoUri
+                if (photo != null && !photoFailed) {
+                    AsyncImage(
+                        model = photo,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onError = { photoFailed = true },
+                    )
+                } else {
+                    Text(mark, color = LilacLight, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                }
             }
             Text(
                 title,

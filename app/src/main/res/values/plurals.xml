@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <plurals name="notices_dismiss_app">
+        <item quantity="one">Dismiss %d</item>
+        <item quantity="other">Dismiss %d</item>
+    </plurals>
     <plurals name="delete_button">
         <item quantity="one">Delete %d</item>
         <item quantity="other">Delete %d</item>

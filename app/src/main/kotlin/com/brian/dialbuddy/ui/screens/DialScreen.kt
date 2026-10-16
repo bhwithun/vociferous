@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
@@ -48,14 +49,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 import com.brian.dialbuddy.R
 import com.brian.dialbuddy.domain.DeletionCounts
 import com.brian.dialbuddy.domain.presentVoicemails
 import com.brian.dialbuddy.telecom.Calls
+import com.brian.dialbuddy.ui.components.CallsMenu
 import com.brian.dialbuddy.ui.components.HistoryPage
 import com.brian.dialbuddy.ui.components.KeypadPane
 import com.brian.dialbuddy.ui.components.MailboxPane
+import com.brian.dialbuddy.ui.components.NoticesMenu
+import com.brian.dialbuddy.ui.components.NoticesPage
 import com.brian.dialbuddy.ui.components.RaggedCard
 import com.brian.dialbuddy.ui.components.SpeakerButton
 import com.brian.dialbuddy.ui.components.StatTable
@@ -67,6 +72,10 @@ import com.brian.dialbuddy.ui.theme.HistoryBand
 import com.brian.dialbuddy.ui.theme.HistoryBody
 import com.brian.dialbuddy.ui.theme.HistoryInk
 import com.brian.dialbuddy.ui.theme.HistoryStroke
+import com.brian.dialbuddy.ui.theme.NoticeBand
+import com.brian.dialbuddy.ui.theme.NoticeBody
+import com.brian.dialbuddy.ui.theme.NoticeInk
+import com.brian.dialbuddy.ui.theme.NoticeStroke
 import com.brian.dialbuddy.ui.theme.PhoneBand
 import com.brian.dialbuddy.ui.theme.PhoneInk
 import com.brian.dialbuddy.ui.theme.PhoneStroke
@@ -83,7 +92,8 @@ import com.brian.dialbuddy.viewmodel.visibleMailboxTabs
 
 private const val PHONE = 0
 private const val HISTORY = 1
-private const val VOICEMAIL = 2
+private const val NOTICES = 2
+private const val VOICEMAIL = 3
 
 @Composable
 fun DialScreen(
@@ -91,6 +101,7 @@ fun DialScreen(
     state: DialUiState,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val inCall by Calls.state.collectAsState()
     val callActive = inCall.calls.isNotEmpty()
     var section by remember { mutableIntStateOf(PHONE) }
@@ -99,7 +110,10 @@ fun DialScreen(
     val mailCards = visibleMailboxTabs(viewModel.knownCount(state), viewModel.unknownCount(state))
     val mailPager = rememberPagerState(initialPage = 0) { mailCards.size }
     val historyPager = rememberPagerState(initialPage = 0) { 2 }
+    val noticeApps = viewModel.noticeApps(state)
+    val noticePager = rememberPagerState(initialPage = 0) { noticeApps.size.coerceAtLeast(1) }
     var shownMailCard by remember { mutableStateOf<MailboxTab?>(null) }
+    var shownNoticeApp by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.toast) {
         val message = state.toast ?: return@LaunchedEffect
         Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -138,6 +152,24 @@ fun DialScreen(
         }
         val target = mailCards.indexOf(preferred)
         if (target >= 0 && mailPager.currentPage != target) mailPager.scrollToPage(target)
+    }
+    LaunchedEffect(noticePager.settledPage, noticeApps) {
+        noticeApps.getOrNull(noticePager.settledPage)?.packageName?.let { shownNoticeApp = it }
+    }
+    LaunchedEffect(noticeApps) {
+        if (noticeApps.isEmpty()) {
+            if (noticePager.currentPage != 0) noticePager.scrollToPage(0)
+            return@LaunchedEffect
+        }
+        if (noticePager.currentPage >= noticeApps.size) {
+            noticePager.scrollToPage(noticeApps.lastIndex)
+        }
+        val current = shownNoticeApp ?: return@LaunchedEffect
+        val at = noticeApps.getOrNull(noticePager.currentPage)?.packageName
+        if (noticeApps.any { it.packageName == current } && at == current) return@LaunchedEffect
+        val found = noticeApps.indexOfFirst { it.packageName == current }
+        val target = if (found >= 0) found else noticePager.currentPage.coerceAtMost(noticeApps.lastIndex)
+        if (noticePager.currentPage != target) noticePager.scrollToPage(target)
     }
     Column(
         Modifier
@@ -187,7 +219,30 @@ fun DialScreen(
                 }
             }
         } else if (section == HISTORY) {
-            PageDots(page = historyPager.currentPage, count = 2, color = HistoryBand)
+            val recognizedRows = viewModel.historyRows(true, state)
+            val unrecognizedRows = viewModel.historyRows(false, state)
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (recognizedRows.isNotEmpty() || unrecognizedRows.isNotEmpty()) {
+                    CallsMenu(
+                        showRecognized = recognizedRows.isNotEmpty(),
+                        showUnrecognized = unrecognizedRows.isNotEmpty(),
+                        onRecognized = { scope.launch { historyPager.animateScrollToPage(0) } },
+                        onUnrecognized = { scope.launch { historyPager.animateScrollToPage(1) } },
+                    )
+                } else {
+                    Box(Modifier.size(36.dp))
+                }
+                PageDots(
+                    page = historyPager.currentPage,
+                    count = 2,
+                    color = HistoryBand,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(Modifier.size(36.dp))
+            }
             HorizontalPager(
                 state = historyPager,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -205,7 +260,7 @@ fun DialScreen(
                     body = HistoryBody,
                 ) {
                     HistoryPage(
-                        rows = viewModel.historyRows(recognized, state),
+                        rows = if (recognized) recognizedRows else unrecognizedRows,
                         recognized = recognized,
                         access = state.historyAccess,
                         onCall = viewModel::requestCall,
@@ -213,6 +268,55 @@ fun DialScreen(
                         onAddContact = viewModel::addContact,
                         onBecomeDialer = viewModel::requestDialerRole,
                         onAllow = viewModel::requestCallLogPermission,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        } else if (section == NOTICES) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NoticesMenu(
+                    apps = noticeApps,
+                    onSystemHistory = viewModel::openNotificationHistory,
+                    onPick = { packageName ->
+                        val index = noticeApps.indexOfFirst { it.packageName == packageName }
+                        if (index >= 0) {
+                            shownNoticeApp = packageName
+                            scope.launch { noticePager.animateScrollToPage(index) }
+                        }
+                    },
+                )
+                PageDots(
+                    page = noticePager.currentPage,
+                    count = noticeApps.size.coerceAtLeast(1),
+                    color = NoticeBand,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(Modifier.size(36.dp))
+            }
+            HorizontalPager(
+                state = noticePager,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                pageSpacing = 20.dp,
+            ) { page ->
+                val app = noticeApps.getOrNull(page)
+                PageCard(
+                    seed = app?.packageName?.hashCode() ?: 40,
+                    title = app?.appName ?: stringResource(R.string.notices_title),
+                    band = NoticeBand,
+                    ink = NoticeInk,
+                    stroke = NoticeStroke,
+                    body = NoticeBody,
+                ) {
+                    NoticesPage(
+                        rows = if (app == null) emptyList() else viewModel.noticeRows(app.packageName, state),
+                        access = state.noticeAccess,
+                        onOpen = viewModel::openNotice,
+                        onDismiss = viewModel::dismissNotice,
+                        onDismissAll = { app?.let { viewModel.dismissApp(it.packageName) } },
+                        onAllow = viewModel::requestNotificationAccess,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -275,6 +379,14 @@ fun DialScreen(
                 icon = { color -> HistoryTabIcon(color) },
             ) { section = HISTORY }
             BottomTab(
+                stringResource(R.string.tab_notices),
+                fill = if (section == NOTICES) NoticeBand else NoticeBody,
+                ink = if (section == NOTICES) NoticeInk else NoticeBand,
+                edge = NoticeStroke,
+                modifier = Modifier.weight(1f),
+                icon = { color -> NoticesTabIcon(color) },
+            ) { section = NOTICES }
+            BottomTab(
                 stringResource(
                     R.string.tab_voicemail_count,
                     viewModel.knownCount(state) + viewModel.unknownCount(state),
@@ -291,13 +403,13 @@ fun DialScreen(
 }
 
 @Composable
-private fun PageDots(page: Int, count: Int, color: Color) {
+private fun PageDots(page: Int, count: Int, color: Color, modifier: Modifier = Modifier) {
     Text(
         text = sectionDots(page, count),
         color = color,
         fontSize = 14.sp,
         textAlign = TextAlign.Center,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(top = 2.dp, bottom = 2.dp),
     )
@@ -405,6 +517,40 @@ private fun HistoryTabIcon(color: Color) {
             start = center,
             end = Offset(size.width * 0.72f, center.y),
             strokeWidth = 1.6.dp.toPx(),
+        )
+    }
+}
+
+@Composable
+private fun NoticesTabIcon(color: Color) {
+    Canvas(Modifier.size(22.dp)) {
+        val stroke = Stroke(width = 1.6.dp.toPx())
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.5f, size.height * 0.06f),
+            end = Offset(size.width * 0.5f, size.height * 0.16f),
+            strokeWidth = 1.6.dp.toPx(),
+        )
+        drawArc(
+            color = color,
+            startAngle = 200f,
+            sweepAngle = 140f,
+            useCenter = false,
+            topLeft = Offset(size.width * 0.16f, size.height * 0.14f),
+            size = Size(size.width * 0.68f, size.height * 0.62f),
+            style = stroke,
+        )
+        drawLine(
+            color = color,
+            start = Offset(size.width * 0.18f, size.height * 0.62f),
+            end = Offset(size.width * 0.82f, size.height * 0.62f),
+            strokeWidth = 1.6.dp.toPx(),
+        )
+        drawCircle(
+            color = color,
+            radius = size.minDimension * 0.08f,
+            center = Offset(size.width * 0.5f, size.height * 0.78f),
+            style = stroke,
         )
     }
 }

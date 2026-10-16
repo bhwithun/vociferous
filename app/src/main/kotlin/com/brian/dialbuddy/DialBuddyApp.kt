@@ -3,10 +3,12 @@ package com.brian.dialbuddy
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import com.brian.dialbuddy.data.NoticeLog
 
 class DialBuddyApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        NoticeLog.attach(this)
         val channel = NotificationChannel(
             CALL_CHANNEL_ID,
             getString(R.string.call_channel_name),

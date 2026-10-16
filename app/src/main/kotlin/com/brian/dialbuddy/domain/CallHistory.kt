@@ -17,6 +17,7 @@ data class CallRecord(
     val kind: CallKind,
     val dateMillis: Long,
     val durationSeconds: Long,
+    val cachedPhoto: String? = null,
 )
 
 // contacts null: contact lookup was not allowed, so the name saved on the call is used.

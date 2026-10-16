@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.ContactsContract.CommonDataKinds.Phone
+import android.provider.Settings
 import android.telecom.TelecomManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -132,6 +133,8 @@ class MainActivity : ComponentActivity() {
                     DialCommand.BrowseContacts -> openContacts()
                     is DialCommand.ViewContact -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(command.uri)))
                     is DialCommand.InsertContact -> insertContact(command.number)
+                    DialCommand.OpenNotificationHistory -> openNotificationHistory()
+                    DialCommand.OpenNotificationAccess -> openNotificationAccess()
                 }
             }
         }
@@ -182,6 +185,22 @@ class MainActivity : ComponentActivity() {
             startActivity(intent)
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(this, R.string.add_contact_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openNotificationHistory() {
+        try {
+            startActivity(Intent("android.settings.NOTIFICATION_HISTORY"))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.notices_history_unavailable, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun openNotificationAccess() {
+        try {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.notices_access_unavailable, Toast.LENGTH_LONG).show()
         }
     }
 

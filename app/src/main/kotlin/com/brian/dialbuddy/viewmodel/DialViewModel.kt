@@ -2,9 +2,12 @@ package com.brian.dialbuddy.viewmodel
 
 import android.Manifest
 import android.app.Application
+import android.app.NotificationManager
 import android.app.role.RoleManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.service.notification.NotificationListenerService
 import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
@@ -14,7 +17,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.brian.dialbuddy.R
 import com.brian.dialbuddy.data.AppStorage
+import com.brian.dialbuddy.data.NoticeLog
 import com.brian.dialbuddy.domain.CallRecord
+import com.brian.dialbuddy.domain.Notice
+import com.brian.dialbuddy.domain.NoticeApp
 import com.brian.dialbuddy.domain.DeletionCounts
 import com.brian.dialbuddy.domain.DeletionStamp
 import com.brian.dialbuddy.domain.DEFAULT_THRESHOLD_SECONDS
@@ -35,6 +41,7 @@ import com.brian.dialbuddy.domain.WINDOW_MONTH_MILLIS
 import com.brian.dialbuddy.domain.WINDOW_WEEK_MILLIS
 import com.brian.dialbuddy.domain.WINDOW_YEAR_MILLIS
 import com.brian.dialbuddy.telecom.CallLogDenied
+import com.brian.dialbuddy.telecom.NoticeListener
 import com.brian.dialbuddy.telecom.CallLogStore
 import com.brian.dialbuddy.telecom.ContactLookup
 import com.brian.dialbuddy.telecom.VoicemailAccessDenied
@@ -74,6 +81,12 @@ data class MailboxRow(
 data class HistoryRow(
     val record: CallRecord,
     val contactName: String?,
+    val photoUri: String?,
+    val dayLabel: String,
+)
+
+data class NoticeRow(
+    val notice: Notice,
     val dayLabel: String,
 )
 
@@ -109,7 +122,10 @@ data class DialUiState(
     val loaded: Boolean = false,
     val calls: List<CallRecord> = emptyList(),
     val historyContacts: Map<String, String>? = null,
+    val historyPhotos: Map<String, String>? = null,
     val historyAccess: HistoryAccess = HistoryAccess.Loading,
+    val notices: List<Notice> = emptyList(),
+    val noticeAccess: Boolean = false,
 )
 
 sealed class DialCommand {
@@ -118,6 +134,8 @@ sealed class DialCommand {
     data object BrowseContacts : DialCommand()
     data class ViewContact(val uri: String) : DialCommand()
     data class InsertContact(val number: String) : DialCommand()
+    data object OpenNotificationHistory : DialCommand()
+    data object OpenNotificationAccess : DialCommand()
     data class RequestPermissions(val permissions: Array<String>) : DialCommand() {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -153,6 +171,12 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingContactNumber: String? = null
 
     init {
+        NoticeLog.attach(getApplication())
+        viewModelScope.launch {
+            NoticeLog.records.collect { notices ->
+                _state.update { it.copy(notices = notices) }
+            }
+        }
         viewModelScope.launch {
             val threshold = clampThreshold(
                 storage.getIntOnce(AppStorage.Keys.THRESHOLD, DEFAULT_THRESHOLD_SECONDS),
@@ -202,11 +226,16 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
         val voicemail = has(app, Manifest.permission.READ_VOICEMAIL) ||
             has(app, "com.android.voicemail.permission.ADD_VOICEMAIL")
         val contacts = has(app, Manifest.permission.READ_CONTACTS)
+        val listener = ComponentName(app, NoticeListener::class.java)
+        val noticeAccess = app.getSystemService(NotificationManager::class.java)
+            ?.isNotificationListenerAccessGranted(listener) == true
+        if (noticeAccess) NotificationListenerService.requestRebind(listener)
         _state.update {
             it.copy(
                 isDialer = dialer,
                 hasVoicemailPermission = voicemail,
                 hasContactsPermission = contacts,
+                noticeAccess = noticeAccess,
             )
         }
         reloadMailbox()
@@ -307,13 +336,13 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
         val dialer = _state.value.isDialer
         if (!dialer) {
             _state.update {
-                it.copy(calls = emptyList(), historyContacts = null, historyAccess = HistoryAccess.NeedsRole)
+                it.copy(calls = emptyList(), historyContacts = null, historyPhotos = null, historyAccess = HistoryAccess.NeedsRole)
             }
             return
         }
         if (!has(app, Manifest.permission.READ_CALL_LOG)) {
             _state.update {
-                it.copy(calls = emptyList(), historyContacts = null, historyAccess = HistoryAccess.NeedsPermission)
+                it.copy(calls = emptyList(), historyContacts = null, historyPhotos = null, historyAccess = HistoryAccess.NeedsPermission)
             }
             return
         }
@@ -329,26 +358,48 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
             val (calls, failure) = loaded
             if (failure != null) {
                 _state.update {
-                    it.copy(calls = emptyList(), historyContacts = null, historyAccess = failure)
+                    it.copy(calls = emptyList(), historyContacts = null, historyPhotos = null, historyAccess = failure)
                 }
                 return@launch
             }
-            val contacts = withContext(Dispatchers.IO) {
+            val callers = withContext(Dispatchers.IO) {
                 if (!has(app, Manifest.permission.READ_CONTACTS)) {
                     null
                 } else {
-                    namesForNumbers(calls.map { it.number })
+                    callersForNumbers(calls.map { it.number })
                 }
             }
             if (generation != historyGeneration) return@launch
             _state.update {
-                it.copy(calls = calls, historyContacts = contacts, historyAccess = HistoryAccess.Ready)
+                it.copy(
+                    calls = calls,
+                    historyContacts = callers?.mapValues { (_, caller) -> caller.name },
+                    historyPhotos = callers?.mapNotNull { (number, caller) ->
+                        caller.photo?.let { number to it }
+                    }?.toMap(),
+                    historyAccess = HistoryAccess.Ready,
+                )
             }
         }
     }
 
     private fun namesFor(entries: List<VoicemailEntry>): Map<String, String> =
         namesForNumbers(entries.mapNotNull { it.number })
+
+    private data class CallerMatch(val name: String, val photo: String?)
+
+    private fun callersForNumbers(numbers: List<String>): Map<String, CallerMatch> {
+        val app = getApplication<Application>()
+        if (!has(app, Manifest.permission.READ_CONTACTS)) return emptyMap()
+        val callers = LinkedHashMap<String, CallerMatch>()
+        for (number in numbers.distinct()) {
+            if (number.isBlank()) continue
+            val match = ContactLookup.find(app, number) ?: continue
+            val name = match.name?.takeIf { it.isNotBlank() } ?: continue
+            callers[number] = CallerMatch(name, match.photoUri?.toString())
+        }
+        return callers
+    }
 
     private fun namesForNumbers(numbers: List<String>): Map<String, String> {
         val app = getApplication<Application>()
@@ -553,11 +604,42 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
             .sortedByDescending { it.entry.dateMillis }
     }
 
+    fun noticeApps(state: DialUiState = _state.value): List<NoticeApp> =
+        com.brian.dialbuddy.domain.noticeApps(state.notices)
+
+    fun noticeRows(packageName: String, state: DialUiState = _state.value): List<NoticeRow> {
+        return state.notices
+            .filter { it.packageName == packageName }
+            .map { notice -> NoticeRow(notice = notice, dayLabel = dayLabel(notice.updatedAt)) }
+    }
+
+    fun dismissNotice(key: String) {
+        NoticeLog.remove(setOf(key))
+    }
+
+    fun dismissApp(packageName: String) {
+        val keys = _state.value.notices.filter { it.packageName == packageName }.map { it.key }.toSet()
+        NoticeLog.remove(keys)
+    }
+
+    fun openNotice(key: String) {
+        NoticeLog.open(getApplication(), key)
+    }
+
+    fun requestNotificationAccess() {
+        _commands.tryEmit(DialCommand.OpenNotificationAccess)
+    }
+
+    fun openNotificationHistory() {
+        _commands.tryEmit(DialCommand.OpenNotificationHistory)
+    }
+
     fun historyRows(recognized: Boolean, state: DialUiState = _state.value): List<HistoryRow> {
         return callsForPage(state.calls, state.historyContacts, recognized).map { record ->
             HistoryRow(
                 record = record,
                 contactName = recognizedCallerName(record.number, record.cachedName, state.historyContacts),
+                photoUri = state.historyPhotos?.get(record.number) ?: record.cachedPhoto,
                 dayLabel = dayLabel(record.dateMillis),
             )
         }

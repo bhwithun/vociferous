@@ -23,6 +23,7 @@ class CallLogStore(private val resolver: ContentResolver) {
                 val idIndex = cursor.getColumnIndexOrThrow(CallLog.Calls._ID)
                 val numberIndex = cursor.getColumnIndex(CallLog.Calls.NUMBER)
                 val nameIndex = cursor.getColumnIndex(CallLog.Calls.CACHED_NAME)
+                val photoIndex = cursor.getColumnIndex(CallLog.Calls.CACHED_PHOTO_URI)
                 val typeIndex = cursor.getColumnIndex(CallLog.Calls.TYPE)
                 val dateIndex = cursor.getColumnIndex(CallLog.Calls.DATE)
                 val durationIndex = cursor.getColumnIndex(CallLog.Calls.DURATION)
@@ -46,11 +47,17 @@ class CallLogStore(private val resolver: ContentResolver) {
                     } else {
                         cursor.getString(nameIndex)
                     }
+                    val cachedPhoto = if (!visible || photoIndex < 0 || cursor.isNull(photoIndex)) {
+                        null
+                    } else {
+                        cursor.getString(photoIndex)?.takeIf { it.isNotBlank() }
+                    }
                     records.add(
                         CallRecord(
                             id = cursor.getLong(idIndex),
                             number = number,
                             cachedName = cached,
+                            cachedPhoto = cachedPhoto,
                             kind = callKind(if (typeIndex < 0) 0 else cursor.getInt(typeIndex)),
                             dateMillis = if (dateIndex < 0) 0L else cursor.getLong(dateIndex),
                             durationSeconds = if (durationIndex < 0) 0L else cursor.getLong(durationIndex),
@@ -72,6 +79,7 @@ class CallLogStore(private val resolver: ContentResolver) {
             CallLog.Calls._ID,
             CallLog.Calls.NUMBER,
             CallLog.Calls.CACHED_NAME,
+            CallLog.Calls.CACHED_PHOTO_URI,
             CallLog.Calls.TYPE,
             CallLog.Calls.DATE,
             CallLog.Calls.DURATION,
