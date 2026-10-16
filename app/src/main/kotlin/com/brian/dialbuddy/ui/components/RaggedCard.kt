@@ -3,6 +3,7 @@ package com.brian.dialbuddy.ui.components
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -20,21 +21,44 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.sqrt
 import com.brian.dialbuddy.ui.theme.DigitStroke
+import com.brian.dialbuddy.ui.theme.HistoryDay
 import com.brian.dialbuddy.ui.theme.TitleBand
 import com.brian.dialbuddy.ui.theme.TitleInk
-import kotlin.math.sqrt
+
+val CardInset = 48.dp
+
+@Composable
+fun DaySection(label: String, ink: Color) {
+    Text(
+        text = label,
+        color = ink,
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(HistoryDay)
+            .padding(horizontal = CardInset + 10.dp, vertical = 8.dp),
+    )
+}
 
 @Composable
 fun RaggedCard(
@@ -44,6 +68,7 @@ fun RaggedCard(
     ink: Color = TitleInk,
     stroke: Color = DigitStroke,
     body: Color = Color.Transparent,
+    bleed: Boolean = false,
     modifier: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
@@ -51,28 +76,33 @@ fun RaggedCard(
     var headerBottom by remember { mutableFloatStateOf(0f) }
     val context = LocalContext.current
     val version = remember(context) { appVersionName(context) }
+    val outline = remember(seed) { RaggedShape(seed) }
     Box(
-        modifier.drawBehind {
-            val path = raggedWirePath(seed)
-            if (body.alpha > 0f) {
-                drawPath(path, body)
-            }
-            if (headerBottom > 0f) {
-                val cap = Path().apply {
-                    addRect(Rect(0f, 0f, size.width, headerBottom))
+        modifier
+            .drawBehind {
+                val path = raggedPath(size, this, seed)
+                if (body.alpha > 0f) {
+                    drawPath(path, body)
                 }
-                val filled = Path()
-                filled.op(path, cap, PathOperation.Intersect)
-                drawPath(filled, band)
+                if (headerBottom > 0f) {
+                    val cap = Path().apply {
+                        addRect(Rect(0f, 0f, size.width, headerBottom))
+                    }
+                    val filled = Path()
+                    filled.op(path, cap, PathOperation.Intersect)
+                    drawPath(filled, band)
+                }
             }
-            drawPath(
-                path = path,
-                color = stroke,
-                style = Stroke(width = 1.25.dp.toPx()),
-            )
-        },
+            .drawWithContent {
+                drawContent()
+                drawPath(
+                    path = raggedPath(size, this, seed),
+                    color = stroke,
+                    style = Stroke(width = 1.25.dp.toPx()),
+                )
+            },
     ) {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().clip(outline)) {
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -106,7 +136,7 @@ fun RaggedCard(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 48.dp)
+                    .padding(horizontal = if (bleed) 0.dp else CardInset)
                     .padding(top = 16.dp, bottom = 36.dp),
                 content = content,
             )
@@ -128,7 +158,13 @@ private fun appVersionName(context: Context): String {
     return info.versionName.orEmpty()
 }
 
-private fun DrawScope.raggedWirePath(seed: Int): Path {
+private class RaggedShape(private val seed: Int) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        return Outline.Generic(raggedPath(size, density, seed))
+    }
+}
+
+private fun raggedPath(size: Size, density: Density, seed: Int): Path = with(density) {
     val amp = 6.dp.toPx()
     val margin = 2.dp.toPx()
     val left = margin + amp

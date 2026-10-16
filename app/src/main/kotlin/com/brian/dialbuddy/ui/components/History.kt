@@ -50,7 +50,6 @@ import com.brian.dialbuddy.ui.theme.Danger
 import coil.compose.AsyncImage
 import com.brian.dialbuddy.ui.theme.HistoryBand
 import com.brian.dialbuddy.ui.theme.HistoryBody
-import com.brian.dialbuddy.ui.theme.HistoryDay
 import com.brian.dialbuddy.ui.theme.HistorySent
 import com.brian.dialbuddy.ui.theme.HistoryStroke
 import com.brian.dialbuddy.ui.theme.HistoryInk
@@ -164,13 +163,13 @@ fun HistoryPage(
                 else -> ""
             }
             if (message.isNotEmpty()) {
-                Text(message, color = HistoryText, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                Text(message, color = HistoryText, modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 8.dp))
             }
             if (access == HistoryAccess.NeedsRole) {
                 Button(
                     onClick = onBecomeDialer,
                     colors = historyButtonColors(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset).padding(top = 12.dp),
                 ) {
                     Text(stringResource(R.string.become_dialer))
                 }
@@ -179,7 +178,7 @@ fun HistoryPage(
                 Button(
                     onClick = onAllow,
                     colors = historyButtonColors(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset).padding(top = 12.dp),
                 ) {
                     Text(stringResource(R.string.allow_call_log))
                 }
@@ -190,7 +189,7 @@ fun HistoryPage(
                     if (recognized) R.string.history_empty_recognized else R.string.history_empty_unrecognized,
                 ),
                 color = HistoryMuted,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 8.dp),
             )
         }
         LazyColumn(
@@ -201,16 +200,7 @@ fun HistoryPage(
         ) {
             rows.groupBy { it.dayLabel }.forEach { (day, calls) ->
                 stickyHeader(key = "day-$day") {
-                    Text(
-                        day,
-                        color = HistoryInk,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(HistoryDay)
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                    )
+                    DaySection(day, HistoryInk)
                 }
                 items(calls, key = { "call-${it.record.id}" }) { row ->
                     HistoryRowView(row, onCall, onViewContact) { numberToAdd = it }
@@ -255,7 +245,7 @@ private fun HistoryRowView(
         else -> null
     }
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 5.dp),
         horizontalArrangement = if (placed) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Bottom,
     ) {

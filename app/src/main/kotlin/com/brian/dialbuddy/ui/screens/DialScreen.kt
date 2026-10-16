@@ -259,6 +259,7 @@ fun DialScreen(
                     ink = HistoryInk,
                     stroke = HistoryStroke,
                     body = HistoryBody,
+                    bleed = true,
                 ) {
                     HistoryPage(
                         rows = if (recognized) recognizedRows else unrecognizedRows,
@@ -311,6 +312,7 @@ fun DialScreen(
                     ink = NoticeInk,
                     stroke = NoticeStroke,
                     body = NoticeBody,
+                    bleed = true,
                 ) {
                     NoticesPage(
                         rows = if (app == null) emptyList() else viewModel.noticeRows(app.packageName, state),
@@ -358,6 +360,7 @@ fun DialScreen(
                     band = TitleBand,
                     ink = TitleInk,
                     stroke = DigitStroke,
+                    bleed = card != MailboxTab.Stats,
                     overlay = {
                         if (card != MailboxTab.Stats) {
                             SpeakerButton(
@@ -446,6 +449,7 @@ private fun PageCard(
     ink: Color,
     stroke: Color,
     body: Color = Color.Transparent,
+    bleed: Boolean = false,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
@@ -456,6 +460,7 @@ private fun PageCard(
         ink = ink,
         stroke = stroke,
         body = body,
+        bleed = bleed,
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp, vertical = 10.dp),

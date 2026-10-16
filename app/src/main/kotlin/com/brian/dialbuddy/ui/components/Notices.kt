@@ -154,12 +154,12 @@ fun NoticesPage(
             Text(
                 stringResource(R.string.notices_need_access),
                 color = NoticeText,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 8.dp),
             )
             Button(
                 onClick = onAllow,
                 colors = noticeButtonColors(),
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset).padding(top = 12.dp),
             ) {
                 Text(stringResource(R.string.notices_allow))
             }
@@ -167,7 +167,7 @@ fun NoticesPage(
             Text(
                 stringResource(R.string.notices_empty),
                 color = NoticeMuted,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 8.dp),
             )
         }
         LazyColumn(
@@ -178,16 +178,7 @@ fun NoticesPage(
         ) {
             rows.groupBy { it.dayLabel }.forEach { (day, notices) ->
                 stickyHeader(key = "day-$day") {
-                    Text(
-                        day,
-                        color = NoticeInk,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(NoticeBand)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
+                    DaySection(day, NoticeInk)
                 }
                 items(notices, key = { "notice-${it.notice.key}" }) { row ->
                     NoticeRowView(row, onOpen, onDismiss)
@@ -198,7 +189,7 @@ fun NoticesPage(
             Button(
                 onClick = onDismissAll,
                 colors = noticeButtonColors(),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset).padding(top = 8.dp),
             ) {
                 Text(pluralStringResource(R.plurals.notices_dismiss_app, rows.size, rows.size))
             }
@@ -219,7 +210,7 @@ private fun NoticeRowView(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(horizontal = CardInset, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(

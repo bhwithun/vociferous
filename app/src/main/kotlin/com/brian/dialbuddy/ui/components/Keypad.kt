@@ -42,8 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.Digit
+import com.brian.dialbuddy.ui.theme.DigitLit
+import com.brian.dialbuddy.ui.theme.DigitRest
 import com.brian.dialbuddy.ui.theme.DigitStroke
 import com.brian.dialbuddy.ui.theme.DigitTint
+import com.brian.dialbuddy.ui.theme.Forest
 import com.brian.dialbuddy.ui.theme.InkMuted
 
 private data class KeyFace(
@@ -242,7 +245,13 @@ private fun WireKey(
         modifier = Modifier
             .size(keySize)
             .clip(CircleShape)
-            .background(if (pressed) DigitTint.copy(alpha = 0.34f) else Color.Transparent)
+            .background(
+                when {
+                    pressed -> DigitLit
+                    symbol -> Color.Transparent
+                    else -> DigitRest
+                },
+            )
             .border(1.dp, stroke, CircleShape)
             .semantics { contentDescription = face.description }
             .then(press),
@@ -251,12 +260,16 @@ private fun WireKey(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = face.digit,
-                color = if (symbol) Digit else DigitTint,
+                color = when {
+                    pressed -> Forest
+                    symbol -> Digit
+                    else -> DigitTint
+                },
                 fontSize = 22.sp,
             )
             Text(
                 text = face.letters,
-                color = InkMuted,
+                color = if (pressed) Forest else InkMuted,
                 fontSize = 9.sp,
                 letterSpacing = 0.8.sp,
             )

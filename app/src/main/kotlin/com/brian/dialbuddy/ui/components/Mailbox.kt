@@ -62,7 +62,7 @@ import com.brian.dialbuddy.ui.theme.DigitStroke
 import com.brian.dialbuddy.ui.theme.IconWell
 import com.brian.dialbuddy.ui.theme.Ink
 import com.brian.dialbuddy.ui.theme.InkMuted
-import com.brian.dialbuddy.ui.theme.DateBand
+
 import com.brian.dialbuddy.ui.theme.Forest
 import com.brian.dialbuddy.ui.theme.SurfaceGreen
 import com.brian.dialbuddy.ui.theme.TitleInk
@@ -156,7 +156,7 @@ fun MailboxPane(
 ) {
     var selected by remember { mutableStateOf<MailboxRow?>(null) }
     Column(modifier) {
-        if (showTabs) Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        if (showTabs) Row(Modifier.fillMaxWidth().padding(horizontal = CardInset).padding(top = 12.dp)) {
             MailboxTabButton(stringResource(R.string.tab_known), knownCount, tab == MailboxTab.Known, Modifier.weight(1f)) {
                 onTab(MailboxTab.Known)
             }
@@ -174,6 +174,7 @@ fun MailboxPane(
                 Column(
                     Modifier
                         .fillMaxWidth()
+                        .padding(horizontal = CardInset)
                         .padding(top = 12.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(SurfaceGreen)
@@ -196,10 +197,10 @@ fun MailboxPane(
                 }
             }
             if (statusText.isNotBlank()) {
-                Text(statusText, color = Ink, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                Text(statusText, color = Ink, modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 8.dp))
             }
             if (showSamsungNote) {
-                Text(samsungNote, color = InkMuted, modifier = Modifier.padding(top = 8.dp))
+                Text(samsungNote, color = InkMuted, modifier = Modifier.padding(horizontal = CardInset).padding(top = 8.dp))
             }
             LazyColumn(
                 Modifier
@@ -209,16 +210,7 @@ fun MailboxPane(
             ) {
                 rows.groupBy { it.dayLabel }.forEach { (day, messages) ->
                     stickyHeader(key = "day-$day") {
-                        Text(
-                            day,
-                            color = TitleInk,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(DateBand)
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                        )
+                        DaySection(day, TitleInk)
                     }
                     items(messages, key = { "msg-${it.entry.id}" }) { row ->
                         val marked = row.entry.qualifiesForBulkDelete(
@@ -260,7 +252,7 @@ fun MailboxPane(
             Button(
                 onClick = onDelete,
                 enabled = deleteEnabled,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CardInset),
             ) {
                 Text(deleteLabel)
             }
@@ -304,7 +296,7 @@ private fun VoicemailRowView(
     val title = row.contactName ?: stringResource(R.string.unknown_caller)
     val duration = row.entry.durationSeconds
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        Modifier.fillMaxWidth().padding(horizontal = CardInset, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(
