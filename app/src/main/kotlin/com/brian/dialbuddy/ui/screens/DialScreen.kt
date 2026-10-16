@@ -281,6 +281,7 @@ fun DialScreen(
                 NoticesMenu(
                     apps = noticeApps,
                     onSystemHistory = viewModel::openNotificationHistory,
+                    onDeleteAll = viewModel::dismissAllNotices,
                     onPick = { packageName ->
                         val index = noticeApps.indexOfFirst { it.packageName == packageName }
                         if (index >= 0) {

@@ -622,6 +622,10 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
         NoticeLog.remove(keys)
     }
 
+    fun dismissAllNotices() {
+        NoticeLog.remove(_state.value.notices.map { it.key }.toSet())
+    }
+
     fun openNotice(key: String) {
         NoticeLog.open(getApplication(), key)
     }

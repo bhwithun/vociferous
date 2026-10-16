@@ -14,6 +14,7 @@
     <string name="notices_untitled">Notice</string>
     <string name="notices_system_history">System history</string>
     <string name="notices_menu">Apps with notices</string>
+    <string name="notices_delete_all">Delete all</string>
     <string name="notices_history_unavailable">Notification history is not available on this phone.</string>
     <string name="notices_access_unavailable">Notification access settings could not be opened.</string>
     <string name="history_recognized">Recognized</string>

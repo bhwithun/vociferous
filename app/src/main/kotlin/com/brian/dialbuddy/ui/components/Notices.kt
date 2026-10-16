@@ -68,6 +68,7 @@ import java.time.format.DateTimeFormatter
 fun NoticesMenu(
     apps: List<NoticeApp>,
     onSystemHistory: () -> Unit,
+    onDeleteAll: () -> Unit,
     onPick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -120,6 +121,17 @@ fun NoticesMenu(
                         onPick(app.packageName)
                     },
                     colors = itemColors,
+                )
+            }
+            if (apps.isNotEmpty()) {
+                HorizontalDivider(color = NoticeStroke)
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.notices_delete_all)) },
+                    onClick = {
+                        open = false
+                        onDeleteAll()
+                    },
+                    colors = MenuDefaults.itemColors(textColor = Danger),
                 )
             }
         }
