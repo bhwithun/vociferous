@@ -126,6 +126,8 @@ data class DialUiState(
     val historyAccess: HistoryAccess = HistoryAccess.Loading,
     val notices: List<Notice> = emptyList(),
     val noticeAccess: Boolean = false,
+    val playingVoicemailId: Long? = null,
+    val playbackFraction: Float = 0f,
 )
 
 sealed class DialCommand {
@@ -151,7 +153,20 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
     private val storage = AppStorage(app)
     private val store = VoicemailStore(app.contentResolver)
     private val callLog = CallLogStore(app.contentResolver)
-    private val player = VoicemailPlayer(app, store, speakerOn = false) { message -> toast(message) }
+    private val player = VoicemailPlayer(
+        app,
+        store,
+        speakerOn = false,
+        onPlaying = { id ->
+            _state.update { it.copy(playingVoicemailId = id, playbackFraction = 0f) }
+        },
+        onProgress = { fraction ->
+            _state.update { state ->
+                if (state.playingVoicemailId == null) state else state.copy(playbackFraction = fraction)
+            }
+        },
+        onError = { message -> toast(message) },
+    )
     private var loadGeneration = 0
     private var historyGeneration = 0
     private val callLogObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -547,7 +562,7 @@ class DialViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun play(id: Long) {
-        player.play(id)
+        if (_state.value.playingVoicemailId == id) player.stop() else player.play(id)
     }
 
     fun askDeleteVisible(tab: MailboxTab) {

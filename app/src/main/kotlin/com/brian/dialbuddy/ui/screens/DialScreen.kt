@@ -702,6 +702,8 @@ private fun MailboxPage(viewModel: DialViewModel, state: DialUiState, tab: Mailb
         onTab = viewModel::showMailbox,
         onThreshold = viewModel::setThreshold,
         onDelete = { viewModel.askDeleteVisible(tab) },
+        playingId = state.playingVoicemailId,
+        playbackFraction = state.playbackFraction,
         onPlay = viewModel::play,
         onDeleteOne = viewModel::askDeleteOne,
         onViewContact = { viewModel.openContact(it.entry.number) },

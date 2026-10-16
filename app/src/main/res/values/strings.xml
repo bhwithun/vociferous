@@ -86,6 +86,7 @@
     <string name="call">Call</string>
     <string name="browse">Browse</string>
     <string name="play">Play</string>
+    <string name="stop">Stop</string>
     <string name="close">Close</string>
     <string name="duration_unknown">Length unknown</string>
     <string name="date_today">Today</string>

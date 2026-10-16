@@ -18,6 +18,8 @@ class VoicemailPlayer(
     context: Context,
     private val store: VoicemailStore,
     speakerOn: Boolean,
+    private val onPlaying: (Long?) -> Unit,
+    private val onProgress: (Float) -> Unit,
     private val onError: (String) -> Unit,
 ) {
     private val app = context.applicationContext
@@ -35,6 +37,7 @@ class VoicemailPlayer(
     private var focusRequest: AudioFocusRequest? = null
     private var observer: ContentObserver? = null
     private var poll: Runnable? = null
+    private var clock: Runnable? = null
     private var previousMode: Int? = null
     private var preparing = false
 
@@ -43,7 +46,8 @@ class VoicemailPlayer(
             onError(app.getString(com.brian.dialbuddy.R.string.play_during_call))
             return
         }
-        stop()
+        halt(clearPlaying = false)
+        onPlaying(id)
         val token = generation
         io.execute {
             val media = try {
@@ -69,12 +73,21 @@ class VoicemailPlayer(
     }
 
     fun stop() {
+        halt(clearPlaying = true)
+    }
+
+    private fun halt(clearPlaying: Boolean) {
         generation += 1
         preparing = false
         clearWatch()
+        stopClock()
         releasePlayer()
         restoreRoute()
         abandonFocus()
+        if (clearPlaying) {
+            onPlaying(null)
+            onProgress(0f)
+        }
     }
 
     fun release() {
@@ -89,6 +102,8 @@ class VoicemailPlayer(
             return
         }
         preparing = true
+        clearWatch()
+        releasePlayer()
         val mp = MediaPlayer()
         player = mp
         mp.setAudioAttributes(speech)
@@ -96,7 +111,7 @@ class VoicemailPlayer(
             if (token != generation) return@setOnPreparedListener
             applyRoute(prepared)
             prepared.start()
-            preparing = false
+            startClock(token)
         }
         mp.setOnCompletionListener {
             if (token == generation) stop()
@@ -222,6 +237,35 @@ class VoicemailPlayer(
         player = null
     }
 
+    private fun startClock(token: Int) {
+        stopClock()
+        val task = object : Runnable {
+            override fun run() {
+                if (token != generation) return
+                playedFraction(player)?.let(onProgress)
+                if (token == generation) main.postDelayed(this, CLOCK_MS)
+            }
+        }
+        clock = task
+        main.post(task)
+    }
+
+    private fun stopClock() {
+        clock?.let { main.removeCallbacks(it) }
+        clock = null
+    }
+
+    private fun playedFraction(mp: MediaPlayer?): Float? {
+        if (mp == null) return null
+        return try {
+            if (!mp.isPlaying) return null
+            val duration = mp.duration
+            if (duration <= 0) 0f else (mp.currentPosition.toFloat() / duration).coerceIn(0f, 1f)
+        } catch (_: IllegalStateException) {
+            null
+        }
+    }
+
     private fun clearWatch() {
         poll?.let { main.removeCallbacks(it) }
         poll = null
@@ -239,5 +283,6 @@ class VoicemailPlayer(
         const val VOICEMAIL_ITEM = "vnd.android.cursor.item/voicemail"
         const val DOWNLOAD_TIMEOUT_MS = 25_000L
         const val POLL_MS = 1_000L
+        const val CLOCK_MS = 100L
     }
 }

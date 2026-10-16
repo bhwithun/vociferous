@@ -58,7 +58,6 @@ import com.brian.dialbuddy.domain.qualifiesForBulkDelete
 import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.Danger
 import com.brian.dialbuddy.ui.theme.OnDanger
-import com.brian.dialbuddy.ui.theme.Digit
 import com.brian.dialbuddy.ui.theme.DigitStroke
 import com.brian.dialbuddy.ui.theme.IconWell
 import com.brian.dialbuddy.ui.theme.Ink
@@ -146,6 +145,8 @@ fun MailboxPane(
     onTab: (MailboxTab) -> Unit,
     onThreshold: (Int) -> Unit,
     onDelete: () -> Unit,
+    playingId: Long?,
+    playbackFraction: Float,
     onPlay: (Long) -> Unit,
     onDeleteOne: (Long) -> Unit,
     onViewContact: (MailboxRow) -> Unit,
@@ -227,6 +228,8 @@ fun MailboxPane(
                         VoicemailRowView(
                             row = row,
                             marked = marked,
+                            playing = playingId == row.entry.id,
+                            progress = if (playingId == row.entry.id) playbackFraction else 0f,
                             onPlay = onPlay,
                             onDeleteOne = onDeleteOne,
                             onOpen = { selected = row },
@@ -237,14 +240,12 @@ fun MailboxPane(
             selected?.let { row ->
                 VoicemailDetailDialog(
                     row = row,
+                    playing = playingId == row.entry.id,
                     marked = row.entry.qualifiesForBulkDelete(
                         thresholdSeconds,
                         recognized = row.contactName != null,
                     ),
-                    onPlay = {
-                        selected = null
-                        onPlay(row.entry.id)
-                    },
+                    onPlay = { onPlay(row.entry.id) },
                     onDelete = {
                         selected = null
                         onDeleteOne(row.entry.id)
@@ -294,6 +295,8 @@ private fun MailboxTabButton(
 private fun VoicemailRowView(
     row: MailboxRow,
     marked: Boolean,
+    playing: Boolean,
+    progress: Float,
     onPlay: (Long) -> Unit,
     onDeleteOne: (Long) -> Unit,
     onOpen: () -> Unit,
@@ -309,9 +312,8 @@ private fun VoicemailRowView(
             modifier = Modifier.width(84.dp),
         ) {
             ProfileMark(
-                name = row.contactName,
                 marked = marked,
-                onClick = onOpen,
+                onClick = { onDeleteOne(row.entry.id) },
             )
             Text(
                 title,
@@ -321,7 +323,9 @@ private fun VoicemailRowView(
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .clickable(onClick = onOpen),
             )
         }
         Column(
@@ -329,32 +333,42 @@ private fun VoicemailRowView(
             horizontalAlignment = Alignment.End,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val playbackLabel = stringResource(if (playing) R.string.stop else R.string.play)
                 Box(
-                    Modifier
-                        .height(40.dp)
-                        .width(40.dp)
-                        .clip(CircleShape)
-                        .border(1.dp, Accent, CircleShape)
-                        .clickable { onPlay(row.entry.id) },
+                    Modifier.size(40.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("▶", color = Accent)
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .border(1.dp, Accent.copy(alpha = if (playing) 0.35f else 1f), CircleShape)
+                            .clickable { onPlay(row.entry.id) }
+                            .semantics { contentDescription = playbackLabel },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (playing) {
+                            Box(Modifier.size(12.dp).background(Accent))
+                        } else {
+                            Text("▶", color = Accent)
+                        }
+                    }
+                    if (playing) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val stroke = 1.5.dp.toPx()
+                            val inset = stroke / 2f
+                            drawArc(
+                                color = Accent,
+                                startAngle = -90f,
+                                sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                                useCenter = false,
+                                topLeft = Offset(inset, inset),
+                                size = Size(size.width - stroke, size.height - stroke),
+                                style = Stroke(width = stroke, cap = StrokeCap.Round),
+                            )
+                        }
+                    }
                 }
-                Text(
-                    stringResource(R.string.slide_delete),
-                    color = Danger,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .height(40.dp)
-                        .width(88.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .border(1.dp, Danger, RoundedCornerShape(22.dp))
-                        .clickable { onDeleteOne(row.entry.id) }
-                        .padding(top = 10.dp),
-                )
             }
             Text(
                 timeLabel(row.entry.dateMillis),
@@ -377,41 +391,39 @@ private fun VoicemailRowView(
 
 @Composable
 private fun ProfileMark(
-    name: String?,
-    onClick: (() -> Unit)?,
+    onClick: () -> Unit,
     marked: Boolean = false,
     size: Dp = 64.dp,
 ) {
-    val mark = name?.firstOrNull()?.uppercase() ?: stringResource(R.string.unknown_mark)
+    val label = stringResource(R.string.delete)
     Box(
         Modifier
             .size(size)
             .clip(CircleShape)
-            .background(if (marked) Danger else IconWell)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+            .background(if (marked) Danger else Color.Transparent)
+            .border(if (marked) 0.dp else 2.dp, Danger, CircleShape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        if (marked) {
-            Canvas(Modifier.fillMaxSize()) {
-                val inset = this.size.minDimension * 0.3f
-                val stroke = this.size.minDimension * 0.08f
-                drawLine(
-                    color = OnDanger,
-                    start = Offset(inset, inset),
-                    end = Offset(this.size.width - inset, this.size.height - inset),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-                drawLine(
-                    color = OnDanger,
-                    start = Offset(this.size.width - inset, inset),
-                    end = Offset(inset, this.size.height - inset),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                )
-            }
-        } else {
-            Text(mark, color = Digit, fontWeight = FontWeight.Bold, fontSize = if (size < 70.dp) 22.sp else 28.sp)
+        Canvas(Modifier.fillMaxSize()) {
+            val inset = this.size.minDimension * 0.3f
+            val stroke = this.size.minDimension * 0.08f
+            val color = if (marked) OnDanger else Danger
+            drawLine(
+                color = color,
+                start = Offset(inset, inset),
+                end = Offset(this.size.width - inset, this.size.height - inset),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = color,
+                start = Offset(this.size.width - inset, inset),
+                end = Offset(inset, this.size.height - inset),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round,
+            )
         }
     }
 }
@@ -419,6 +431,7 @@ private fun ProfileMark(
 @Composable
 private fun VoicemailDetailDialog(
     row: MailboxRow,
+    playing: Boolean,
     marked: Boolean,
     onPlay: () -> Unit,
     onDelete: () -> Unit,
@@ -435,16 +448,17 @@ private fun VoicemailDetailDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 ProfileMark(
-                    name = known,
                     marked = marked,
-                    onClick = if (known != null) onViewContact else null,
+                    onClick = onDelete,
                     size = 84.dp,
                 )
                 Text(
                     known ?: stringResource(R.string.unknown_caller),
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp),
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .then(if (known != null) Modifier.clickable(onClick = onViewContact) else Modifier),
                 )
             }
         },
@@ -469,15 +483,12 @@ private fun VoicemailDetailDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onPlay) { Text(stringResource(R.string.play)) }
+            TextButton(onClick = onPlay) {
+                Text(stringResource(if (playing) R.string.stop else R.string.play))
+            }
         },
         dismissButton = {
-            Row {
-                TextButton(onClick = onDelete) {
-                    Text(stringResource(R.string.delete), color = Danger)
-                }
-                TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
-            }
+            TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
         },
     )
 }

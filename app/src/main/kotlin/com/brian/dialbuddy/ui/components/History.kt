@@ -5,15 +5,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +40,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +50,8 @@ import com.brian.dialbuddy.ui.theme.Danger
 import coil.compose.AsyncImage
 import com.brian.dialbuddy.ui.theme.HistoryBand
 import com.brian.dialbuddy.ui.theme.HistoryBody
+import com.brian.dialbuddy.ui.theme.HistoryDay
+import com.brian.dialbuddy.ui.theme.HistorySent
 import com.brian.dialbuddy.ui.theme.HistoryStroke
 import com.brian.dialbuddy.ui.theme.HistoryInk
 import com.brian.dialbuddy.ui.theme.HistoryMuted
@@ -203,11 +205,11 @@ fun HistoryPage(
                         day,
                         color = HistoryInk,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(HistoryBand)
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .background(HistoryDay)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                     )
                 }
                 items(calls, key = { "call-${it.record.id}" }) { row ->
@@ -225,94 +227,116 @@ private fun HistoryRowView(
     onViewContact: (String) -> Unit,
     onOfferAdd: (String) -> Unit,
 ) {
+    val placed = row.record.kind == CallKind.Outgoing
     val number = row.record.number
     val title = row.contactName
         ?: number.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.private_number)
-    val kindColor = if (row.record.kind == CallKind.Missed ||
+    val missed = row.record.kind == CallKind.Missed ||
         row.record.kind == CallKind.Rejected ||
         row.record.kind == CallKind.Blocked
-    ) {
-        Danger
-    } else {
-        HistoryBand
+    val titleColor = if (placed) HistoryInk else HistoryText
+    val muted = if (placed) HistoryInk else HistoryMuted
+    val kindColor = when {
+        missed -> Danger
+        placed -> HistoryInk
+        else -> HistoryBand
     }
     val duration = callDurationClock(row.record.durationSeconds)
     val detail = if (duration == null) kindLabel(row.record.kind) else "${kindLabel(row.record.kind)} · $duration"
+    val bubble = if (placed) {
+        RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
+    } else {
+        RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
+    }
+    val openPerson: (() -> Unit)? = when {
+        row.contactName != null && number.isNotBlank() -> ({ onViewContact(number) })
+        number.isNotBlank() -> ({ onOfferAdd(number) })
+        else -> null
+    }
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        verticalAlignment = Alignment.Top,
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        horizontalArrangement = if (placed) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Bottom,
     ) {
+        if (!placed) CallerMark(row, title, openPerson)
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(84.dp),
+            Modifier
+                .padding(horizontal = 8.dp)
+                .widthIn(max = 280.dp)
+                .clip(bubble)
+                .background(if (placed) HistorySent else HistoryWell)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            val mark = row.contactName?.firstOrNull()?.uppercase() ?: stringResource(R.string.unknown_mark)
-            var photoFailed by remember(row.photoUri) { mutableStateOf(false) }
-            Box(
-                Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(HistoryWell)
-                    .then(
-                        when {
-                            row.contactName != null -> Modifier.clickable { onViewContact(number) }
-                            number.isNotBlank() -> Modifier.clickable { onOfferAdd(number) }
-                            else -> Modifier
-                        },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                val photo = row.photoUri
-                if (photo != null && !photoFailed) {
-                    AsyncImage(
-                        model = photo,
-                        contentDescription = title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onError = { photoFailed = true },
-                    )
-                } else {
-                    Text(mark, color = LilacLight, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                }
-            }
             Text(
                 title,
-                color = HistoryText,
+                color = titleColor,
                 fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
+                fontSize = 15.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = if (openPerson == null) Modifier else Modifier.clickable(onClick = openPerson),
             )
-        }
-        Column(
-            Modifier.weight(1f).padding(start = 8.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            val callLabel = stringResource(R.string.call)
-            Box(
-                Modifier
-                    .height(40.dp)
-                    .width(72.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, if (number.isBlank()) HistoryMuted else HistoryBand, CircleShape)
-                    .clickable(enabled = number.isNotBlank()) { onCall(number) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(callLabel, color = if (number.isBlank()) HistoryMuted else HistoryBand, fontSize = 14.sp)
-            }
-            Text(
-                timeLabel(row.record.dateMillis),
-                color = HistoryMuted,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-            Text(detail, color = kindColor, fontSize = 14.sp)
+            Text(detail, color = kindColor, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
             if (row.contactName != null && number.isNotBlank()) {
-                Text(number, color = HistoryMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    number,
+                    color = muted,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(timeLabel(row.record.dateMillis), color = muted, fontSize = 12.sp)
+                val callLabel = stringResource(R.string.call)
+                val callColor = if (number.isBlank()) muted else titleColor
+                Text(
+                    callLabel,
+                    color = callColor,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, callColor, CircleShape)
+                        .clickable(enabled = number.isNotBlank()) { onCall(number) }
+                        .padding(horizontal = 10.dp, vertical = 2.dp),
+                )
+            }
+        }
+        if (placed) CallerMark(row, title, openPerson)
+    }
+}
+
+@Composable
+private fun CallerMark(row: HistoryRow, title: String, onClick: (() -> Unit)?) {
+    val mark = row.contactName?.firstOrNull()?.uppercase() ?: stringResource(R.string.unknown_mark)
+    var photoFailed by remember(row.photoUri) { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(HistoryWell)
+            .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val photo = row.photoUri
+        if (photo != null && !photoFailed) {
+            AsyncImage(
+                model = photo,
+                contentDescription = title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                onError = { photoFailed = true },
+            )
+        } else {
+            Text(mark, color = LilacLight, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
 }

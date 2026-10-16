@@ -1,9 +1,12 @@
 package com.brian.dialbuddy.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,18 +26,24 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.Digit
 import com.brian.dialbuddy.ui.theme.DigitStroke
+import com.brian.dialbuddy.ui.theme.DigitTint
 import com.brian.dialbuddy.ui.theme.InkMuted
 
 private data class KeyFace(
@@ -103,7 +112,11 @@ fun KeypadPane(
                 .padding(horizontal = 12.dp),
         ) {
             Text(
-                text = digits.ifEmpty { hint },
+                text = if (digits.isEmpty()) {
+                    buildAnnotatedString { append(hint) }
+                } else {
+                    dialedText(digits)
+                },
                 color = if (digits.isEmpty()) InkMuted else Digit,
                 fontWeight = if (digits.isEmpty()) FontWeight.Normal else FontWeight.Medium,
                 fontSize = if (digits.isEmpty()) 14.sp else 26.sp,
@@ -208,24 +221,37 @@ private fun WireKey(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
 ) {
+    val symbol = face.digit == "*" || face.digit == "#"
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press = if (onLongClick != null) {
+        Modifier.combinedClickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = onClick,
+            onLongClick = onLongClick,
+        )
+    } else {
+        Modifier.clickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = onClick,
+        )
+    }
     Box(
         modifier = Modifier
             .size(keySize)
+            .clip(CircleShape)
+            .background(if (pressed) DigitTint.copy(alpha = 0.34f) else Color.Transparent)
             .border(1.dp, stroke, CircleShape)
             .semantics { contentDescription = face.description }
-            .then(
-                if (onLongClick != null) {
-                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                } else {
-                    Modifier.clickable(onClick = onClick)
-                },
-            ),
+            .then(press),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = face.digit,
-                color = Digit,
+                color = if (symbol) Digit else DigitTint,
                 fontSize = 22.sp,
             )
             Text(
@@ -234,6 +260,14 @@ private fun WireKey(
                 fontSize = 9.sp,
                 letterSpacing = 0.8.sp,
             )
+        }
+    }
+}
+
+private fun dialedText(digits: String) = buildAnnotatedString {
+    digits.forEach { mark ->
+        withStyle(SpanStyle(color = if (mark.isDigit()) DigitTint else Digit)) {
+            append(mark)
         }
     }
 }
