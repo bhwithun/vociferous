@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -50,8 +51,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.brian.dialbuddy.domain.qualifiesForBulkDelete
 import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.Danger
+import com.brian.dialbuddy.ui.theme.OnDanger
 import com.brian.dialbuddy.ui.theme.Digit
 import com.brian.dialbuddy.ui.theme.IconWell
 import com.brian.dialbuddy.ui.theme.Ink
@@ -159,8 +162,13 @@ fun MailboxPane(
                         )
                     }
                     items(messages, key = { "msg-${it.entry.id}" }) { row ->
+                        val marked = row.entry.qualifiesForBulkDelete(
+                            thresholdSeconds,
+                            recognized = row.contactName != null,
+                        )
                         VoicemailRowView(
                             row = row,
+                            marked = marked,
                             onPlay = onPlay,
                             onDeleteOne = onDeleteOne,
                             onOpen = { selected = row },
@@ -171,6 +179,10 @@ fun MailboxPane(
             selected?.let { row ->
                 VoicemailDetailDialog(
                     row = row,
+                    marked = row.entry.qualifiesForBulkDelete(
+                        thresholdSeconds,
+                        recognized = row.contactName != null,
+                    ),
                     onPlay = {
                         selected = null
                         onPlay(row.entry.id)
@@ -223,6 +235,7 @@ private fun MailboxTabButton(
 @Composable
 private fun VoicemailRowView(
     row: MailboxRow,
+    marked: Boolean,
     onPlay: (Long) -> Unit,
     onDeleteOne: (Long) -> Unit,
     onOpen: () -> Unit,
@@ -239,6 +252,7 @@ private fun VoicemailRowView(
         ) {
             ProfileMark(
                 name = row.contactName,
+                marked = marked,
                 onClick = onOpen,
             )
             Text(
@@ -304,23 +318,50 @@ private fun VoicemailRowView(
 }
 
 @Composable
-private fun ProfileMark(name: String?, onClick: (() -> Unit)?, size: Dp = 64.dp) {
+private fun ProfileMark(
+    name: String?,
+    onClick: (() -> Unit)?,
+    marked: Boolean = false,
+    size: Dp = 64.dp,
+) {
     val mark = name?.firstOrNull()?.uppercase() ?: stringResource(R.string.unknown_mark)
     Box(
         Modifier
             .size(size)
             .clip(CircleShape)
-            .background(IconWell)
+            .background(if (marked) Danger else IconWell)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        Text(mark, color = Digit, fontWeight = FontWeight.Bold, fontSize = if (size < 70.dp) 22.sp else 28.sp)
+        if (marked) {
+            Canvas(Modifier.fillMaxSize()) {
+                val inset = this.size.minDimension * 0.3f
+                val stroke = this.size.minDimension * 0.08f
+                drawLine(
+                    color = OnDanger,
+                    start = Offset(inset, inset),
+                    end = Offset(this.size.width - inset, this.size.height - inset),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+                drawLine(
+                    color = OnDanger,
+                    start = Offset(this.size.width - inset, inset),
+                    end = Offset(inset, this.size.height - inset),
+                    strokeWidth = stroke,
+                    cap = StrokeCap.Round,
+                )
+            }
+        } else {
+            Text(mark, color = Digit, fontWeight = FontWeight.Bold, fontSize = if (size < 70.dp) 22.sp else 28.sp)
+        }
     }
 }
 
 @Composable
 private fun VoicemailDetailDialog(
     row: MailboxRow,
+    marked: Boolean,
     onPlay: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
@@ -337,6 +378,7 @@ private fun VoicemailDetailDialog(
             ) {
                 ProfileMark(
                     name = known,
+                    marked = marked,
                     onClick = if (known != null) onViewContact else null,
                     size = 84.dp,
                 )
