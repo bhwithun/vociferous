@@ -2,11 +2,19 @@ package com.brian.dialbuddy.data
 
 import android.app.Notification
 import android.app.PendingIntent
+import android.app.Person
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.LauncherApps
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.Icon
+import android.os.Process
 import android.service.notification.StatusBarNotification
+import androidx.core.graphics.drawable.toBitmap
 import com.brian.dialbuddy.domain.Notice
 import com.brian.dialbuddy.domain.decodeNotices
 import com.brian.dialbuddy.domain.encodeNotices
@@ -16,7 +24,9 @@ import com.brian.dialbuddy.domain.removeNotices
 import com.brian.dialbuddy.domain.syncNotices
 import com.brian.dialbuddy.telecom.NoticeListener
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.security.MessageDigest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -131,7 +141,113 @@ object NoticeLog {
             postedAt = sbn.postTime,
             updatedAt = System.currentTimeMillis(),
             dismissed = false,
+            iconName = saveAvatar(context, sbn),
         )
+    }
+
+    fun avatarFor(context: Context, notice: Notice): Bitmap? {
+        val name = notice.iconName
+        if (!name.isNullOrBlank()) {
+            val file = File(context.applicationContext.filesDir, "notice-icons/$name")
+            val decoded = BitmapFactory.decodeFile(file.absolutePath)
+            if (decoded != null) return decoded
+        }
+        return appBitmap(context, notice.packageName)
+    }
+
+    private fun saveAvatar(context: Context, sbn: StatusBarNotification): String? {
+        return try {
+            val bitmap = avatarBitmap(context, sbn) ?: return null
+            val dir = File(context.applicationContext.filesDir, "notice-icons")
+            if (!dir.exists() && !dir.mkdirs()) return null
+            val name = iconFileName(sbn.key)
+            FileOutputStream(File(dir, name)).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            name
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun avatarBitmap(context: Context, sbn: StatusBarNotification): Bitmap? {
+        val notification = sbn.notification
+        val extras = notification.extras
+        val icons = ArrayList<Icon>()
+        @Suppress("DEPRECATION")
+        val messages = Notification.MessagingStyle.Message.getMessagesFromBundleArray(
+            extras.getParcelableArray(Notification.EXTRA_MESSAGES),
+        )
+        messages?.mapNotNullTo(icons) { it.senderPerson?.icon }
+        @Suppress("DEPRECATION")
+        (extras.getParcelable(Notification.EXTRA_MESSAGING_PERSON) as? Person)?.icon?.let { icons.add(it) }
+        @Suppress("DEPRECATION")
+        val people = extras.getParcelableArrayList<Person>(Notification.EXTRA_PEOPLE_LIST)
+        people?.mapNotNullTo(icons) { it.icon }
+        notification.getLargeIcon()?.let { icons.add(it) }
+        notification.smallIcon?.let { icons.add(it) }
+        for (icon in icons) {
+            bitmapFromIcon(context, icon)?.let { return scale(it) }
+        }
+        shortcutBitmap(context, sbn)?.let { return scale(it) }
+        return appBitmap(context, sbn.packageName)?.let { scale(it) }
+    }
+
+    private fun bitmapFromIcon(context: Context, icon: Icon): Bitmap? {
+        return try {
+            val uriBacked = icon.type == Icon.TYPE_URI || icon.type == Icon.TYPE_URI_ADAPTIVE_BITMAP
+            if (uriBacked) {
+                context.contentResolver.openInputStream(icon.uri)?.use { BitmapFactory.decodeStream(it) }
+            } else {
+                icon.loadDrawable(context)?.toBitmap(96, 96)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun shortcutBitmap(context: Context, sbn: StatusBarNotification): Bitmap? {
+        val shortcutId = sbn.notification.shortcutId ?: return null
+        return try {
+            val launcher = context.getSystemService(LauncherApps::class.java) ?: return null
+            val query = LauncherApps.ShortcutQuery()
+                .setPackage(sbn.packageName)
+                .setShortcutIds(listOf(shortcutId))
+                .setQueryFlags(
+                    LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                        LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED or
+                        LauncherApps.ShortcutQuery.FLAG_MATCH_CACHED,
+                )
+            val shortcut = launcher.getShortcuts(query, Process.myUserHandle())?.firstOrNull() ?: return null
+            launcher.getShortcutIconDrawable(shortcut, context.resources.displayMetrics.densityDpi)
+                ?.toBitmap(96, 96)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun scale(bitmap: Bitmap): Bitmap {
+        if (bitmap.width <= 96 && bitmap.height <= 96) return bitmap
+        return Bitmap.createScaledBitmap(bitmap, 96, 96, true)
+    }
+
+    private fun appBitmap(context: Context, packageName: String): Bitmap? {
+        return try {
+            appIcon(context, packageName)?.toBitmap(96, 96)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun appIcon(context: Context, packageName: String): Drawable? {
+        return try {
+            context.packageManager.getApplicationIcon(packageName)
+        } catch (_: PackageManager.NameNotFoundException) {
+            null
+        }
+    }
+
+    private fun iconFileName(key: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray())
+        return digest.take(12).joinToString("") { "%02x".format(it) } + ".png"
     }
 
     private fun appLabel(context: Context, packageName: String): String {
@@ -145,6 +261,8 @@ object NoticeLog {
 
     private fun write(next: List<Notice>) {
         if (next == _records.value) return
+        val dropped = _records.value.filter { old -> next.none { it.key == old.key } }
+        deleteIcons(dropped)
         val target = file ?: return
         try {
             val tmp = File(target.parentFile, "${target.name}.tmp")
@@ -157,5 +275,13 @@ object NoticeLog {
         } catch (_: IOException) {
         }
         _records.value = next
+    }
+
+    private fun deleteIcons(notices: List<Notice>) {
+        val root = file?.parentFile ?: return
+        for (notice in notices) {
+            val name = notice.iconName ?: continue
+            File(File(root, "notice-icons"), name).delete()
+        }
     }
 }

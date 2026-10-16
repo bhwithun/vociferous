@@ -109,6 +109,19 @@ class NotificationLogTest {
         )
         assertEquals(original, decodeNotices(encodeNotices(original)))
         assertEquals(original, decodeNotices("not a row\n" + encodeNotices(original)))
+        val withIcon = notice("c", updatedAt = 4, iconName = "face.png")
+        assertEquals("face.png", decodeNotices(encodeNotices(listOf(withIcon))).single().iconName)
+        val legacy = listOf("k", "pkg", "App", "Title", "Body", "1", "2", "0").joinToString("\u001f")
+        assertEquals(null, decodeNotices(legacy).single().iconName)
+    }
+
+    @Test
+    fun updateKeepsThePreviousAvatarWhenTheNewOneIsMissing() {
+        val first = recordPosted(emptyList(), notice("a", updatedAt = 1, iconName = "a.png"))
+        val kept = recordPosted(first, notice("a", updatedAt = 2))
+        val replaced = recordPosted(kept, notice("a", updatedAt = 3, iconName = "b.png"))
+        assertEquals("a.png", kept.single().iconName)
+        assertEquals("b.png", replaced.single().iconName)
     }
 
     private fun notice(
@@ -120,6 +133,7 @@ class NotificationLogTest {
         packageName: String = "com.example.app",
         appName: String = "Example",
         dismissed: Boolean = false,
+        iconName: String? = null,
     ) = Notice(
         key = key,
         packageName = packageName,
@@ -129,5 +143,6 @@ class NotificationLogTest {
         postedAt = postedAt,
         updatedAt = updatedAt,
         dismissed = dismissed,
+        iconName = iconName,
     )
 }

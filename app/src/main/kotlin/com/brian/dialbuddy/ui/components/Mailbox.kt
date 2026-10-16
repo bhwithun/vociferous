@@ -21,6 +21,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,6 +59,7 @@ import com.brian.dialbuddy.ui.theme.Accent
 import com.brian.dialbuddy.ui.theme.Danger
 import com.brian.dialbuddy.ui.theme.OnDanger
 import com.brian.dialbuddy.ui.theme.Digit
+import com.brian.dialbuddy.ui.theme.DigitStroke
 import com.brian.dialbuddy.ui.theme.IconWell
 import com.brian.dialbuddy.ui.theme.Ink
 import com.brian.dialbuddy.ui.theme.InkMuted
@@ -68,6 +72,60 @@ import com.brian.dialbuddy.viewmodel.MailboxTab
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+@Composable
+fun MailMenu(
+    cards: List<MailboxTab>,
+    onPick: (MailboxTab) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(R.string.voicemail_menu)
+    val itemColors = MenuDefaults.itemColors(textColor = Ink)
+    Column(modifier) {
+        Canvas(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(SurfaceGreen)
+                .border(1.dp, DigitStroke, CircleShape)
+                .clickable { open = true }
+                .semantics { contentDescription = label }
+                .padding(8.dp),
+        ) {
+            val stroke = 1.8.dp.toPx()
+            listOf(0.22f, 0.5f, 0.78f).forEach { y ->
+                drawLine(
+                    color = Accent,
+                    start = Offset(size.width * 0.12f, size.height * y),
+                    end = Offset(size.width * 0.88f, size.height * y),
+                    strokeWidth = stroke,
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = SurfaceGreen,
+        ) {
+            cards.forEach { card ->
+                val title = when (card) {
+                    MailboxTab.Known -> stringResource(R.string.tab_known)
+                    MailboxTab.Unknown -> stringResource(R.string.tab_unknown)
+                    MailboxTab.Stats -> stringResource(R.string.tab_settings)
+                }
+                DropdownMenuItem(
+                    text = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = {
+                        open = false
+                        onPick(card)
+                    },
+                    colors = itemColors,
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

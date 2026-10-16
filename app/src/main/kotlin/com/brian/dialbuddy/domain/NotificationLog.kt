@@ -14,6 +14,7 @@ data class Notice(
     val postedAt: Long,
     val updatedAt: Long,
     val dismissed: Boolean,
+    val iconName: String? = null,
 )
 
 fun recordPosted(current: List<Notice>, incoming: Notice, ownPackage: String = OWN_PACKAGE): List<Notice> {
@@ -22,7 +23,11 @@ fun recordPosted(current: List<Notice>, incoming: Notice, ownPackage: String = O
     val next = if (previous == null) {
         incoming.copy(dismissed = false)
     } else {
-        incoming.copy(postedAt = previous.postedAt, dismissed = false)
+        incoming.copy(
+            postedAt = previous.postedAt,
+            dismissed = false,
+            iconName = incoming.iconName ?: previous.iconName,
+        )
     }
     return capNotices(current.filter { it.key != incoming.key } + next)
 }
@@ -93,6 +98,7 @@ fun encodeNotices(notices: List<Notice>): String {
             notice.postedAt.toString(),
             notice.updatedAt.toString(),
             if (notice.dismissed) "1" else "0",
+            notice.iconName.orEmpty(),
         ).joinToString(FIELD.toString()) { escapeField(it) }
     }
 }
@@ -102,7 +108,7 @@ fun decodeNotices(raw: String): List<Notice> {
     return raw.lineSequence().mapNotNull { line ->
         if (line.isEmpty()) return@mapNotNull null
         val parts = splitFields(line)
-        if (parts.size != 8) return@mapNotNull null
+        if (parts.size != 8 && parts.size != 9) return@mapNotNull null
         Notice(
             key = parts[0],
             packageName = parts[1],
@@ -112,6 +118,7 @@ fun decodeNotices(raw: String): List<Notice> {
             postedAt = parts[5].toLongOrNull() ?: return@mapNotNull null,
             updatedAt = parts[6].toLongOrNull() ?: return@mapNotNull null,
             dismissed = parts[7] == "1",
+            iconName = parts.getOrNull(8)?.takeIf { it.isNotBlank() },
         )
     }.toList()
 }

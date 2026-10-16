@@ -36,6 +36,7 @@
     <string name="call_voicemail">Voicemail</string>
     <string name="call_other">Call</string>
     <string name="tab_voicemail">Voicemail</string>
+    <string name="voicemail_menu">Voicemail pages</string>
     <string name="tab_voicemail_count">Voicemail (%1$d)</string>
     <string name="bluetooth">Bluetooth</string>
     <string name="tab_keypad">Keypad</string>

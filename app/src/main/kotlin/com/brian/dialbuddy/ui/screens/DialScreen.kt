@@ -58,6 +58,7 @@ import com.brian.dialbuddy.telecom.Calls
 import com.brian.dialbuddy.ui.components.CallsMenu
 import com.brian.dialbuddy.ui.components.HistoryPage
 import com.brian.dialbuddy.ui.components.KeypadPane
+import com.brian.dialbuddy.ui.components.MailMenu
 import com.brian.dialbuddy.ui.components.MailboxPane
 import com.brian.dialbuddy.ui.components.NoticesMenu
 import com.brian.dialbuddy.ui.components.NoticesPage
@@ -322,7 +323,28 @@ fun DialScreen(
                 }
             }
         } else {
-            PageDots(page = mailPager.currentPage, count = mailCards.size, color = TitleBand)
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MailMenu(
+                    cards = mailCards,
+                    onPick = { card ->
+                        val index = mailCards.indexOf(card)
+                        if (index >= 0) {
+                            shownMailCard = card
+                            scope.launch { mailPager.animateScrollToPage(index) }
+                        }
+                    },
+                )
+                PageDots(
+                    page = mailPager.currentPage,
+                    count = mailCards.size,
+                    color = TitleBand,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(Modifier.size(36.dp))
+            }
             HorizontalPager(
                 state = mailPager,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
